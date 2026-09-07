@@ -31,7 +31,7 @@ fn cmd(b: Builtin, id: &str, title: &str, keywords: &[&str], inputs: Vec<Input>)
         target: Target::Background,
         cwd: None,
         label: None,
-        keep_open: false,
+        keep_open: matches!(b, Builtin::RenameWorkspace | Builtin::RenameTab | Builtin::RenameAgent),
         confirm: matches!(b, Builtin::CloseWorkspace | Builtin::CloseTab | Builtin::ClosePane),
         inputs,
         disabled: false,
