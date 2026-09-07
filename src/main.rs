@@ -3,13 +3,15 @@ mod commands;
 mod config;
 mod context;
 mod herdr;
+mod keys;
 mod search;
 mod state;
 mod ui;
 
 use anyhow::{bail, Context, Result};
 use app::View;
-use crossterm::event::{self, Event, KeyEventKind};
+use crossterm::event::{self, Event, KeyEventKind, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags};
+use crossterm::execute;
 use herdr::Client;
 use serde_json::json;
 use std::time::Duration;
@@ -76,12 +78,20 @@ fn run_ui(view: Option<View>) -> Result<()> {
         hook(info);
     }));
     let mut terminal = ratatui::init();
+    // Kitty encoding is what lets cmd/ctrl chords reach the palette unambiguously.
+    let _ = execute!(std::io::stdout(), PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES));
+    let debug_keys = app.cfg.debug_keys;
     let result = (|| -> Result<()> {
         loop {
             terminal.draw(|f| ui::draw(f, &app))?;
             if event::poll(Duration::from_millis(50))? {
                 match event::read()? {
-                    Event::Key(k) if k.kind == KeyEventKind::Press => app.handle_key(k),
+                    Event::Key(k) if k.kind == KeyEventKind::Press => {
+                        if debug_keys {
+                            commands::run::log(&format!("key {k:?}"));
+                        }
+                        app.handle_key(k)
+                    }
                     _ => {}
                 }
             }
@@ -91,6 +101,7 @@ fn run_ui(view: Option<View>) -> Result<()> {
             }
         }
     })();
+    let _ = execute!(std::io::stdout(), PopKeyboardEnhancementFlags);
     ratatui::restore();
     state::clear_open();
     result

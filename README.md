@@ -30,7 +30,7 @@ Opens in Insert mode. Escape enters Normal mode; Escape does nothing there.
 | type | Insert | filter |
 | `i` `/` | Normal | back to Insert |
 | `1`-`4`, Tab, Shift+Tab | both (digits Normal only) | switch View |
-| `j` `k` ↑ ↓ ^n ^p | Normal / both | move |
+| `j` `k` ↑ ↓ ^n ^p ^j ^k | Normal / both | move |
 | Enter | both | focus the Item, or run the Command |
 | ^o | both | action menu for the Item |
 | `p` | Normal | toggle Preview |
@@ -39,7 +39,7 @@ Opens in Insert mode. Escape enters Normal mode; Escape does nothing there.
 | `r` | Normal | rename workspace, tab or agent |
 | `x` then `y` | Normal | close workspace, tab or pane |
 | `e` | Normal | edit the Command File defining the Command |
-| `q`, ^c | Normal / both | close |
+| `q`, ^c, the key bound to `open` | Normal / both | close (the `open-<view>` keys switch View, or close when already there) |
 
 ## Commands
 
@@ -77,6 +77,7 @@ height = "60%"
 editor = "auto"          # or a command; {{file}} is substituted
 poll_ms = 500
 preview_lines = 40
+debug_keys = false  # append every key event to palette.log in the state dir
 agent_kind = "claude"
 ```
 

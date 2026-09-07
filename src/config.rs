@@ -10,6 +10,7 @@ pub struct Config {
     pub poll_ms: u64,
     pub preview_lines: u32,
     pub agent_kind: String,
+    pub debug_keys: bool,
 }
 
 impl Default for Config {
@@ -21,6 +22,7 @@ impl Default for Config {
             poll_ms: 500,
             preview_lines: 40,
             agent_kind: "claude".into(),
+            debug_keys: false,
         }
     }
 }

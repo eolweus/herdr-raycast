@@ -4,6 +4,7 @@ use crate::commands::{resolve, Class, Command, Input, InputKind};
 use crate::config::{self, Config};
 use crate::context::Captured;
 use crate::herdr::{AgentStatus, Client, Snapshot};
+use crate::keys::{self, PaletteKey};
 use crate::search::Search;
 use crate::state;
 use anyhow::Result;
@@ -107,6 +108,7 @@ pub struct App {
     last_poll: Instant,
     plugin_id: String,
     palette_pane: Option<String>,
+    palette_keys: Vec<PaletteKey>,
 }
 
 impl App {
@@ -115,6 +117,7 @@ impl App {
         let cfg = config::load();
         let ctx = Captured::from_env().unwrap_or_else(|| Captured::capture(&client));
         let plugin_id = run::plugin_id();
+        let palette_keys = keys::palette_keys(&plugin_id);
         let snapshot = client.snapshot()?;
         let resolved = resolve::resolve(&client, &ctx, &plugin_id);
         let st = state::load();
@@ -140,6 +143,7 @@ impl App {
             search: Search::default(),
             last_poll: Instant::now(),
             plugin_id,
+            palette_keys,
             palette_pane: std::env::var("HERDR_PANE_ID").ok(),
         };
         if let Some(e) = app.command_errors.first() {
@@ -338,6 +342,13 @@ impl App {
             self.quit = true;
             return;
         }
+        if let Some(k) = self.palette_keys.iter().find(|k| k.binding.matches(&key)) {
+            match k.view {
+                Some(v) if v != self.view => self.set_view(v),
+                _ => self.quit = true,
+            }
+            return;
+        }
         if self.flow.is_some() {
             self.handle_flow_key(key);
             return;
@@ -348,8 +359,8 @@ impl App {
             (_, KeyCode::Enter) => self.primary(),
             (_, KeyCode::Down) => self.cursor = self.move_cursor(1, self.filtered.len()),
             (_, KeyCode::Up) => self.cursor = self.move_cursor(-1, self.filtered.len()),
-            (_, KeyCode::Char('n')) if ctrl => self.cursor = self.move_cursor(1, self.filtered.len()),
-            (_, KeyCode::Char('p')) if ctrl => self.cursor = self.move_cursor(-1, self.filtered.len()),
+            (_, KeyCode::Char('n' | 'j')) if ctrl => self.cursor = self.move_cursor(1, self.filtered.len()),
+            (_, KeyCode::Char('p' | 'k')) if ctrl => self.cursor = self.move_cursor(-1, self.filtered.len()),
             (_, KeyCode::Char('o')) if ctrl => self.open_menu(),
             (_, KeyCode::Char('u')) if ctrl => {
                 self.query.clear();
@@ -601,8 +612,8 @@ impl App {
                     }
                     KeyCode::Down => cursor = (cursor + 1) % filtered.len().max(1),
                     KeyCode::Up => cursor = (cursor + filtered.len().max(1) - 1) % filtered.len().max(1),
-                    KeyCode::Char('n') if ctrl => cursor = (cursor + 1) % filtered.len().max(1),
-                    KeyCode::Char('p') if ctrl => cursor = (cursor + filtered.len().max(1) - 1) % filtered.len().max(1),
+                    KeyCode::Char('n' | 'j') if ctrl => cursor = (cursor + 1) % filtered.len().max(1),
+                    KeyCode::Char('p' | 'k') if ctrl => cursor = (cursor + filtered.len().max(1) - 1) % filtered.len().max(1),
                     KeyCode::Backspace => {
                         query.pop();
                         cursor = 0;
@@ -650,8 +661,8 @@ impl App {
                     }
                     KeyCode::Down => cursor = (cursor + 1) % filtered.len().max(1),
                     KeyCode::Up => cursor = (cursor + filtered.len().max(1) - 1) % filtered.len().max(1),
-                    KeyCode::Char('n') if ctrl => cursor = (cursor + 1) % filtered.len().max(1),
-                    KeyCode::Char('p') if ctrl => cursor = (cursor + filtered.len().max(1) - 1) % filtered.len().max(1),
+                    KeyCode::Char('n' | 'j') if ctrl => cursor = (cursor + 1) % filtered.len().max(1),
+                    KeyCode::Char('p' | 'k') if ctrl => cursor = (cursor + filtered.len().max(1) - 1) % filtered.len().max(1),
                     KeyCode::Char(c) if !ctrl => {
                         if is_text { text.push(c); } else { query.push(c); cursor = 0; }
                     }
