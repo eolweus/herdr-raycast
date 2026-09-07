@@ -85,6 +85,18 @@ pub struct Item {
     pub item_ref: Option<ItemRef>,
 }
 
+impl Item {
+    // Names outlive pane and workspace ids across restarts, so usage keys on them.
+    pub fn usage_key(&self) -> String {
+        match self.kind {
+            Kind::Command(_) => self.id.clone(),
+            Kind::Workspace => format!("ws:{}", self.hay.first().cloned().unwrap_or_default()),
+            Kind::Tab => format!("tab:{}", self.hay.first().cloned().unwrap_or_default()),
+            Kind::Pane | Kind::Agent => format!("agent:{}", self.hay.first().cloned().unwrap_or_default()),
+        }
+    }
+}
+
 impl Kind {
     pub fn section(&self) -> (usize, &'static str) {
         match self {
@@ -158,6 +170,7 @@ pub struct App {
     pub flow: Option<Flow>,
     pub status: Option<String>,
     pub quit: bool,
+    pub usage: state::Usage,
     search: Search,
     last_poll: Instant,
     plugin_id: String,
@@ -196,6 +209,7 @@ impl App {
             flow: None,
             status: None,
             quit: false,
+            usage: state::Usage::load(),
             search: Search::default(),
             last_poll: Instant::now(),
             plugin_id,
@@ -244,7 +258,8 @@ impl App {
 
     fn apply_filter(&mut self) {
         let hays: Vec<&[String]> = self.items.iter().map(|i| i.hay.as_slice()).collect();
-        let ranked = self.search.rank(&self.query, hays.into_iter());
+        let usage: Vec<u32> = self.items.iter().map(|i| self.usage.count(&i.usage_key())).collect();
+        let ranked = self.search.rank_used(&self.query, hays.into_iter(), &usage);
         self.context.clear();
         self.top = 0;
         if self.query.trim().is_empty() {
@@ -435,7 +450,8 @@ impl App {
     }
 
     fn command_items(&self) -> Vec<Item> {
-        self.commands
+        let mut items: Vec<Item> = self
+            .commands
             .iter()
             .enumerate()
             .map(|(i, c)| Item {
@@ -449,7 +465,9 @@ impl App {
                 hay: c.search_text(),
                 item_ref: None,
             })
-            .collect()
+            .collect();
+        items.sort_by_key(|i| std::cmp::Reverse(self.usage.count(&i.usage_key())));
+        items
     }
 
     fn all_items(&self) -> Vec<Item> {
@@ -582,6 +600,7 @@ impl App {
 
     fn primary(&mut self) {
         let Some(item) = self.selected().cloned() else { return };
+        self.usage.record(&item.usage_key());
         match item.kind {
             Kind::Command(i) => {
                 let cmd = self.commands[i].clone();

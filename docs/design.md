@@ -37,8 +37,12 @@ Header shows the View tabs with their numbers and the Context Directory. Preview
 
 - **All**: three sections with a header line each: Agents, Workspaces (no tabs or panes), Commands. A query puts the three best matches first under a Top header, then ranks the rest within each section and hides empty sections.
 - **Agents**: flat list, sorted blocked, done, working, idle, unknown, then Herdr order.
-- **Workspaces**: the Herdr navigator tree. `▾` on workspace rows, `├──`/`└──` with `│` spines under children, a blank line between workspaces, `◆` on the captured workspace and pane. Tab rows appear only when a workspace has more than one tab. Pane rows are labeled by manual label, agent name, terminal title, agent kind, else "shell". A query keeps tree order and shows ancestors of matches dimmed.
-- **Commands**: all three classes, with class and source shown.
+- **Workspaces**: the Herdr navigator tree. `▾` on workspace rows, `├──`/`└──` with `│` spines under children, a blank line between workspaces, `◆` on the captured workspace and pane. Tab rows appear only when a workspace has more than one tab. Pane rows are labeled by manual label, agent name, terminal title, agent kind, else "shell". A query orders workspaces by their best match, keeps tree order inside each, and shows ancestors of matches dimmed.
+- **Commands**: all three classes, with class and source shown. With no query, the most used come first.
+
+## Ranking
+
+Every item has search fields; the first is its title. A match is tiered: exact, whole word, prefix, substring, fuzzy, with any title match above any match in another field. Within a tier, items used more often (every Enter is counted in `usage.json` in the state dir) come first, then nucleo's score. Herdr's generated tab labels (`1 · dir › agent › title`) are not search fields because they fuzzy-match almost anything.
 
 Status glyphs appear only on agents and on panes running an agent; workspace rows get a blue ▪ outside the tree (the tree caret already marks them there); workspace and tab rows carry an activity summary ("1 blocked · 2 working") in their meta instead. Meta is a list of colored segments: paths cyan, agent kind magenta, workspace blue, status in its status color, the rest dim. Paths show their last two components. The header shows the captured workspace and Context Directory in the same colors, bold.
 

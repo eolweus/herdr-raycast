@@ -67,6 +67,10 @@ choices_command = "terraform state list"
 
 "New command file for this directory" writes a scoped template and opens it; "Edit command files" picks one. Both use `nvim-open` when on PATH, else `$EDITOR` in a popup.
 
+## Ranking
+
+Exact matches beat prefix and fuzzy ones, and a hit in the title beats a hit in the workspace or path. Every Enter is counted in `usage.json` in the state dir, and better-used items win ties. Delete that file to reset.
+
 ## Config
 
 `$(herdr plugin config-dir erling.command-palette)/config.toml`, all optional:
