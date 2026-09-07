@@ -5,6 +5,7 @@ mod context;
 mod git;
 mod herdr;
 mod keys;
+mod markdown;
 mod search;
 mod state;
 mod ui;

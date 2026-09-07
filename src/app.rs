@@ -62,11 +62,18 @@ pub enum Kind {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Tone {
+    Plain,
     Dim,
     Path,
     Agent,
     Workspace,
     Status(AgentStatus),
+    Title,
+    Heading,
+    Strong,
+    Em,
+    Code,
+    Rule,
 }
 
 #[derive(Clone, Debug)]

@@ -75,7 +75,13 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
 
 fn tone_style(t: Tone) -> Style {
     match t {
-        Tone::Dim => Style::default().fg(Color::DarkGray),
+        Tone::Plain => Style::default(),
+        Tone::Dim | Tone::Rule => Style::default().fg(Color::DarkGray),
+        Tone::Title => Style::default().bold(),
+        Tone::Heading => Style::default().fg(Color::Blue).bold(),
+        Tone::Strong => Style::default().bold(),
+        Tone::Em => Style::default().italic(),
+        Tone::Code => Style::default().fg(Color::Yellow),
         Tone::Path => Style::default().fg(Color::Cyan),
         Tone::Agent => Style::default().fg(Color::Magenta),
         Tone::Workspace => Style::default().fg(Color::Blue),
