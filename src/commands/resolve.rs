@@ -73,7 +73,7 @@ mod tests {
             title: title.into(),
             description: String::new(),
             keywords: vec![],
-            class: Class::User { file: "x.toml".into() },
+            class: Class::User { file: "x.toml".into(), scoped: false },
             run: String::new(),
             target: Target::Background,
             cwd: None,

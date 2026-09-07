@@ -80,7 +80,7 @@ fn to_command(def: CommandDef, path: &Path, depth: i32) -> Command {
         id: def.id,
         description: def.description,
         keywords: def.keywords,
-        class: Class::User { file: path.to_path_buf() },
+        class: Class::User { file: path.to_path_buf(), scoped: depth > 0 },
         run: def.run.unwrap_or_default(),
         target: def.target.unwrap_or_default(),
         cwd: def.cwd,

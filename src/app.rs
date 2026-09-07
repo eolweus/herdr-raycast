@@ -593,7 +593,7 @@ impl App {
             },
             'e' => {
                 if let Some(Kind::Command(i)) = self.selected().map(|i| i.kind.clone()) {
-                    if let Class::User { file } = &self.commands[i].class {
+                    if let Class::User { file, .. } = &self.commands[i].class {
                         let mut cmd = builtins::item_action(Builtin::EditCommandFiles, "Edit command file");
                         cmd.inputs.clear();
                         let draft = Draft { command: cmd, item: None, answers: HashMap::from([("file".to_string(), file.display().to_string())]) };
@@ -656,7 +656,7 @@ impl App {
             Kind::Command(i) => {
                 let c = &self.commands[i];
                 let mut v = vec![(c.clone(), None)];
-                if let Class::User { file } = &c.class {
+                if let Class::User { file, .. } = &c.class {
                     let mut e = builtins::item_action(EditCommandFiles, "Edit command file");
                     e.inputs.clear();
                     e.cwd = Some(file.display().to_string());

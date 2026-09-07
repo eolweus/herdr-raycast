@@ -38,7 +38,7 @@ Header shows the View tabs with their numbers and the Context Directory. Preview
 - **All**: three sections with a header line each: Agents, Workspaces (no tabs or panes), Commands. A query puts the three best matches first under a Top header, then ranks the rest within each section and hides empty sections.
 - **Agents**: flat list, sorted blocked, done, working, idle, unknown, then Herdr order.
 - **Workspaces**: the Herdr navigator tree. `▾` on workspace rows, `├──`/`└──` with `│` spines under children, a blank line between workspaces, `◆` on the captured workspace and pane. Tab rows appear only when a workspace has more than one tab. Pane rows are labeled by manual label, agent name, terminal title, agent kind, else "shell". A query orders workspaces by their best match, keeps tree order inside each, and shows ancestors of matches dimmed.
-- **Commands**: all three classes, with class and source shown. With no query, the most used come first.
+- **Commands**: all three classes, with class (built-in, plugin, global, project) and source shown. With no query, the most used come first.
 
 ## Yeet
 

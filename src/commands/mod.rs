@@ -72,7 +72,7 @@ impl Input {
 pub enum Class {
     Builtin(builtins::Builtin),
     PluginAction { plugin_id: String, action_id: String },
-    User { file: PathBuf },
+    User { file: PathBuf, scoped: bool },
 }
 
 impl Class {
@@ -80,7 +80,8 @@ impl Class {
         match self {
             Class::Builtin(_) => "built-in",
             Class::PluginAction { .. } => "plugin",
-            Class::User { .. } => "user",
+            Class::User { scoped: false, .. } => "global",
+            Class::User { scoped: true, .. } => "project",
         }
     }
 }
