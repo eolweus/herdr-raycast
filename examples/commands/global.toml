@@ -1,0 +1,45 @@
+# Copy to $(herdr plugin config-dir erling.command-palette)/commands/ and edit.
+# No `scope` means these Commands are visible everywhere.
+
+[[commands]]
+id = "lazygit"
+title = "Lazygit here"
+keywords = ["git"]
+run = "lazygit"
+in = "popup"
+
+[[commands]]
+id = "shell-tab"
+title = "New shell tab here"
+run = ""
+in = "tab"
+label = "{{input.label}}"
+
+[[commands.inputs]]
+name = "label"
+prompt = "Tab label"
+kind = "text"
+
+[[commands]]
+id = "run-in-split"
+title = "Run command in split"
+run = "{{input.cmd}}"
+in = "split"
+
+[[commands.inputs]]
+name = "cmd"
+prompt = "Command"
+kind = "text"
+
+[[commands]]
+id = "checkout-branch"
+title = "Checkout branch"
+keywords = ["git", "switch"]
+run = "git switch {{input.branch}}"
+in = "current-pane"
+
+[[commands.inputs]]
+name = "branch"
+prompt = "Branch"
+kind = "choice"
+choices_command = "git branch --format=%(refname:short)"

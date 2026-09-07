@@ -1,0 +1,49 @@
+id = "erling.command-palette"
+name = "Command Palette"
+version = "0.1.0"
+min_herdr_version = "0.8.0"
+platforms = ["macos", "linux"]
+description = "Raycast-style palette: jump to workspaces, tabs, panes and agents, run built-in, plugin and user-defined commands."
+
+[[build]]
+command = ["bash", "herdr/install.sh"]
+
+[[panes]]
+id = "palette"
+title = "Command Palette"
+placement = "popup"
+width = "60%"
+height = "60%"
+command = ["sh", "-c", "exec bash \"$HERDR_PLUGIN_ROOT/herdr/run.sh\" ui"]
+
+[[panes]]
+id = "runner"
+title = "Command Palette"
+placement = "popup"
+width = "80%"
+height = "80%"
+command = ["sh", "-c", "exec bash \"$HERDR_PLUGIN_ROOT/herdr/run.sh\" runner"]
+
+[[actions]]
+id = "open"
+title = "Command Palette: open"
+contexts = ["pane", "workspace"]
+command = ["sh", "-c", "exec bash \"$HERDR_PLUGIN_ROOT/herdr/run.sh\" open"]
+
+[[actions]]
+id = "open-agents"
+title = "Command Palette: agents"
+contexts = ["pane", "workspace"]
+command = ["sh", "-c", "exec bash \"$HERDR_PLUGIN_ROOT/herdr/run.sh\" open --view agents"]
+
+[[actions]]
+id = "open-workspaces"
+title = "Command Palette: workspaces"
+contexts = ["pane", "workspace"]
+command = ["sh", "-c", "exec bash \"$HERDR_PLUGIN_ROOT/herdr/run.sh\" open --view workspaces"]
+
+[[actions]]
+id = "open-commands"
+title = "Command Palette: commands"
+contexts = ["pane", "workspace"]
+command = ["sh", "-c", "exec bash \"$HERDR_PLUGIN_ROOT/herdr/run.sh\" open --view commands"]

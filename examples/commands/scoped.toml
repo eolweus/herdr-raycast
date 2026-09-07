@@ -1,0 +1,15 @@
+# A scoped file: only visible when the Context Directory is inside `scope`.
+# Worktree checkouts of the same repo match too.
+scope = "/home/erling/atlas/atlas-workspace/worktrees/main/infra"
+
+[[commands]]
+id = "tf-plan"
+title = "Terraform plan"
+keywords = ["terraform"]
+run = "terraform plan"
+in = "split"
+
+# Hide a Plugin Action or Built-in in this scope.
+[[commands]]
+id = "persiyanov.reviewr.open"
+disabled = true
