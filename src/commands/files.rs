@@ -1,4 +1,4 @@
-use super::{Class, Command, Input, Target};
+use super::{Class, Command, Input, ItemKind, Target};
 use crate::context::Captured;
 use anyhow::{Context, Result};
 use serde::Deserialize;
@@ -36,6 +36,8 @@ pub struct CommandDef {
     pub confirm: bool,
     #[serde(default)]
     pub inputs: Vec<Input>,
+    #[serde(default)]
+    pub on: Vec<ItemKind>,
     #[serde(default)]
     pub disabled: bool,
 }
@@ -88,6 +90,7 @@ fn to_command(def: CommandDef, path: &Path, depth: i32) -> Command {
         keep_open: def.keep_open,
         confirm: def.confirm,
         inputs: def.inputs,
+        on: def.on,
         disabled: def.disabled,
         depth,
         source: path.display().to_string(),

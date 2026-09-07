@@ -40,10 +40,6 @@ Header shows the View tabs with their numbers and the Context Directory. Preview
 - **Workspaces**: the Herdr navigator tree. `▾` on workspace rows, `├──`/`└──` with `│` spines under children, a blank line between workspaces, `◆` on the captured workspace and pane. Tab rows appear only when a workspace has more than one tab. Pane rows are labeled by manual label, agent name, terminal title, agent kind, else "shell". A query orders workspaces by their best match, keeps tree order inside each, and shows ancestors of matches dimmed.
 - **Commands**: all three classes, with class (built-in, plugin, global, project) and source shown. With no query, the most used come first.
 
-## Yeet
-
-`Yeet` (Command, and an action on Agent rows) hands work off without interrupting the session. It takes the Claude agent in the palette's pane, or the only Claude agent in that tab, reads its session id from the Herdr snapshot, opens an unfocused tab labeled `yeet` in the same workspace and cwd, starts `claude --resume <id> --fork-session` there through `agent.start`, and prompts the fork to run `/yeet-task` with the optional instruction, without asking for confirmation. The fork closes its own tab when yeet-spawn has reported; on failure or a real need for input it renames the tab to `yeet: needs input` and shows a Herdr notification. A lingering `yeet` tab therefore means attention is needed. `/yeet-fork` is not offered: it relies on the spawned worker reporting back to the calling pane, which for a fork no longer exists.
-
 ## Ranking
 
 Every item has search fields; the first is its title. A match is tiered: exact, whole word, prefix, substring, fuzzy, with any title match above any match in another field. Within a tier, items used more often (every Enter is counted in `usage.json` in the state dir) come first, then nucleo's score. Herdr's generated tab labels (`1 · dir › agent › title`) are not search fields because they fuzzy-match almost anything.
@@ -102,6 +98,7 @@ cwd = "{{ctx.dir}}"          # default: Context Directory
 label = "{{input.branch}}"   # tab or workspace label when `in` creates one
 keep_open = false
 confirm = false
+on = ["agent"]               # optional: also an action on these Item kinds (workspace | tab | pane | agent)
 
 [[commands.inputs]]
 name = "branch"
@@ -122,14 +119,20 @@ Context Directory: focused pane's live cwd (process-info of the foreground proce
 ### Script contract
 
 - `run` is a shell string or a path. Relative paths resolve against the Command File's directory.
-- Templates: `{{input.<name>}}`, `{{ctx.dir}}`, `{{ctx.workspace_id}}`, `{{ctx.tab_id}}`, `{{ctx.pane_id}}`, `{{ctx.agent}}`, `{{item.id}}`.
-- Env vars with the same values: `RAYCAST_DIR`, `RAYCAST_WORKSPACE_ID`, `RAYCAST_TAB_ID`, `RAYCAST_PANE_ID`, `RAYCAST_AGENT`, `RAYCAST_ITEM_ID`, `RAYCAST_INPUT_<NAME>`.
+- Templates: `{{input.<name>}}`, `{{ctx.dir}}`, `{{ctx.workspace_id}}`, `{{ctx.tab_id}}`, `{{ctx.pane_id}}`, `{{ctx.agent}}`, `{{item.id}}` plus the `item.*` vars under Item actions.
+- Env vars with the same values: `RAYCAST_DIR`, `RAYCAST_WORKSPACE_ID`, `RAYCAST_TAB_ID`, `RAYCAST_PANE_ID`, `RAYCAST_AGENT`, `RAYCAST_ITEM_ID`, `RAYCAST_ITEM_<KEY>` for every `item.*` var, `RAYCAST_INPUT_<NAME>`.
 - `HERDR_BIN_PATH` and `HERDR_SOCKET_PATH` pass through. `herdr-raycast api <method> [json]` calls any socket method for scripts.
 - The Palette spawns the process detached, then exits.
 
+### Item actions from Command Files
+
+A Command with `on` (a list of Item kinds: workspace, tab, pane, agent) is offered in the action menu of matching Items, with the Item as its target. Started from the Commands list, the Palette resolves the target from the Captured Context in the order `on` lists the kinds: agent = the captured pane's agent, else the only agent in the captured tab; pane, tab and workspace = the captured ones. No resolvable target is an error shown in the footer before any input is asked.
+
+Every Command with a target receives `item.*` vars, computed from the snapshot when the Plan is made: `kind`, `id`, `workspace_id`, `tab_id`, `pane_id`, `label`, `cwd` (live cwd, else launch cwd), and for agents `agent` (Herdr name), `agent_kind`, `session_id` (the agent's session id when Herdr knows it, e.g. the Claude session for `claude --resume`). Missing values are empty strings. This is the contract that lets sophisticated Commands live outside the plugin as scripts or binaries; the author's `yeet` (fork a Claude conversation into a tab that runs `/yeet-task`) is such a script in dotfiles, not a Built-in.
+
 ### Built-ins in v1
 
-new workspace, new worktree, new tab, rename workspace, rename tab, rename agent, yeet, close workspace, close tab, close pane, start agent in new pane, run herdr-nvim pick-file, Edit Command Files, New Command File for this directory.
+new workspace, new worktree, new tab, rename workspace, rename tab, rename agent, close workspace, close tab, close pane, start agent in new pane, run herdr-nvim pick-file, Edit Command Files, New Command File for this directory.
 
 New Command File takes a name, sanitizes it to `[a-z0-9-]`, writes `commands/<name>.toml` with `scope` set to the Context Directory, then opens it. Editing uses `nvim-open <file>` when found on PATH, else `$EDITOR <file>` in a popup Target. An `examples/` directory ships shell equivalents of the Built-ins.
 

@@ -86,6 +86,27 @@ impl Class {
     }
 }
 
+/// Item kinds a Command File command can attach to as an action.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ItemKind {
+    Workspace,
+    Tab,
+    Pane,
+    Agent,
+}
+
+impl ItemKind {
+    pub fn label(self) -> &'static str {
+        match self {
+            ItemKind::Workspace => "workspace",
+            ItemKind::Tab => "tab",
+            ItemKind::Pane => "pane",
+            ItemKind::Agent => "agent",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Command {
     pub id: String,
@@ -109,6 +130,8 @@ pub struct Command {
     pub confirm: bool,
     #[serde(default)]
     pub inputs: Vec<Input>,
+    #[serde(default)]
+    pub on: Vec<ItemKind>,
     #[serde(default)]
     pub disabled: bool,
     /// Scope precedence: higher wins. Built-ins -2, plugin actions -1, global 0, scoped = path depth.

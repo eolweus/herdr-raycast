@@ -2,7 +2,7 @@ use super::builtins::Builtin;
 use super::{files, Class, Command, Target};
 use crate::config::{self, Config};
 use crate::context::Captured;
-use crate::herdr::{Client, Env};
+use crate::herdr::{Client, Env, Snapshot};
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -48,6 +48,8 @@ pub struct Plan {
     pub answers: HashMap<String, String>,
     pub ctx: Captured,
     pub item: Option<ItemRef>,
+    #[serde(default)]
+    pub item_vars: Vec<(String, String)>,
     pub palette_pane: Option<String>,
 }
 
@@ -71,6 +73,7 @@ impl Plan {
             ("ctx.agent".into(), self.ctx.agent.clone().unwrap_or_default()),
             ("item.id".into(), self.item.as_ref().map(|i| i.id().to_string()).unwrap_or_default()),
         ];
+        v.extend(self.item_vars.iter().cloned());
         for (k, val) in &self.answers {
             v.push((format!("input.{k}"), val.clone()));
         }
@@ -269,7 +272,6 @@ fn builtin(b: Builtin, plan: &Plan, rt: &Runtime) -> Result<String> {
             c.rename_agent(&target, &name)?;
             Ok(format!("renamed to {name}"))
         }
-        Builtin::Yeet => yeet(plan, c, item),
         Builtin::CloseWorkspace => {
             let id = ws().ok_or_else(|| anyhow!("no workspace"))?;
             c.close_workspace(&id)?;
@@ -355,59 +357,42 @@ pub fn shell_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\\''"))
 }
 
-// Forks the Claude conversation into a new tab and lets the fork run /yeet-task with the
-// original's context, so the original session is never interrupted.
-fn yeet(plan: &Plan, c: &Client, item: Option<&ItemRef>) -> Result<String> {
-    let snap = c.snapshot()?;
-    let agent = match item {
-        Some(ItemRef::Agent { pane_id, .. }) => snap.agent_in_pane(pane_id),
-        _ => {
-            let pane = plan.ctx.pane_id.as_deref().ok_or_else(|| anyhow!("no current pane"))?;
-            snap.agent_in_pane(pane).or_else(|| {
-                let tab = snap.pane(pane).map(|p| p.tab_id.as_str())?;
-                let mut in_tab = snap.agents.iter().filter(|a| a.tab_id == tab && a.agent.as_deref() == Some("claude"));
-                let one = in_tab.next()?;
-                in_tab.next().is_none().then_some(one)
-            })
+/// What a script learns about the Item a Command runs on, as `item.<key>` template vars.
+pub fn item_vars(snap: &Snapshot, item: &ItemRef) -> Vec<(String, String)> {
+    let mut v: Vec<(&str, Option<String>)> = vec![("workspace_id", Some(item.workspace_id().to_string()))];
+    let cwd_of = |fg: &Option<String>, cwd: &Option<String>| fg.clone().or_else(|| cwd.clone());
+    match item {
+        ItemRef::Workspace(id) => {
+            let w = snap.workspace(id);
+            v.push(("kind", Some("workspace".into())));
+            v.push(("label", w.map(|w| w.label.clone())));
+            v.push(("cwd", w.and_then(|w| w.cwd.clone())));
+        }
+        ItemRef::Tab { tab_id, .. } => {
+            v.push(("kind", Some("tab".into())));
+            v.push(("tab_id", Some(tab_id.clone())));
+            v.push(("label", snap.tab(tab_id).map(|t| t.label.clone())));
+        }
+        ItemRef::Pane { pane_id, .. } | ItemRef::Agent { pane_id, .. } => {
+            v.push(("pane_id", Some(pane_id.clone())));
+            if let Some(a) = snap.agent_in_pane(pane_id) {
+                v.push(("kind", Some(if matches!(item, ItemRef::Agent { .. }) { "agent" } else { "pane" }.into())));
+                v.push(("tab_id", Some(a.tab_id.clone())));
+                v.push(("label", Some(a.display_name())));
+                v.push(("agent", a.name.clone().or_else(|| a.agent.clone())));
+                v.push(("agent_kind", a.agent.clone()));
+                v.push(("session_id", a.agent_session.as_ref().filter(|s| s.kind.as_deref() == Some("id")).and_then(|s| s.value.clone())));
+                v.push(("cwd", cwd_of(&a.foreground_cwd, &a.cwd)));
+            } else {
+                let p = snap.pane(pane_id);
+                v.push(("kind", Some("pane".into())));
+                v.push(("tab_id", p.map(|p| p.tab_id.clone())));
+                v.push(("label", p.and_then(|p| p.label.clone().or_else(|| p.terminal_title_stripped.clone()))));
+                v.push(("cwd", p.and_then(|p| cwd_of(&p.foreground_cwd, &p.cwd))));
+            }
         }
     }
-    .ok_or_else(|| anyhow!("no single claude agent in this pane or tab"))?;
-    let session = agent
-        .agent_session
-        .as_ref()
-        .filter(|s| s.agent.as_deref() == Some("claude") && s.kind.as_deref() == Some("id"))
-        .and_then(|s| s.value.clone())
-        .ok_or_else(|| anyhow!("{} has no claude session id yet", agent.display_name()))?;
-    let cwd = agent.foreground_cwd.clone().or_else(|| agent.cwd.clone()).unwrap_or_else(|| plan.ctx.dir_str());
-    let created = c.create_tab(&agent.workspace_id, &cwd, Some("yeet"), false, &Env::new())?;
-    let name = agent_name(&format!("yeet-{}", agent.display_name()));
-    let args = ["--resume".to_string(), session.clone(), "--fork-session".to_string()];
-    // The new shell may not be at its prompt yet; agent.start reports agent_pane_busy until it is.
-    let deadline = Instant::now() + Duration::from_secs(30);
-    loop {
-        match c.start_agent_args(&name, "claude", &created.pane_id, &args) {
-            Ok(()) => break,
-            Err(e) if e.to_string().contains("agent_pane_busy") && Instant::now() < deadline => std::thread::sleep(Duration::from_secs(1)),
-            Err(e) => return Err(e.context("starting the fork")),
-        }
-    }
-    let instruction = plan.get("instruction");
-    let task = match &instruction {
-        Some(i) => format!("Run `/yeet-task {i}` now."),
-        None => "Run `/yeet-task` now, inferring the task from what was just discussed.".to_string(),
-    };
-    let tab = &created.tab_id;
-    let brief = format!(
-        "You are a fork of this conversation, started by the herdr-raycast `yeet` command in tab {tab} to hand work off. \
-Nobody is watching this tab, so do not ask for confirmation: decide and spawn. {task} \
-The original session keeps running in pane {orig}; do not send it anything and do not focus anything. \
-Skip the report-back step: once yeet-spawn has printed its PANE/WORKSPACE lines, run `herdr tab close {tab}` to remove this tab (that ends you). \
-If it fails or you truly cannot proceed without input, run `herdr tab rename {tab} \"yeet: needs input\"` and \
-`herdr notification show \"yeet needs input\" --body \"<one line on what you need>\" --sound request`, then wait.",
-        orig = agent.pane_id
-    );
-    c.prompt_agent(&name, &brief)?;
-    Ok(format!("yeet fork {name} in tab {tab}"))
+    v.into_iter().map(|(k, val)| (format!("item.{k}"), val.unwrap_or_default())).collect()
 }
 
 /// Herdr agent names: `[a-z][a-z0-9_-]*`, at most 32 chars. Empty when nothing usable remains.
@@ -506,6 +491,7 @@ mod tests {
             answers: HashMap::from([("branch".to_string(), "feat".to_string())]),
             ctx: Captured { dir: PathBuf::from("/tmp/x"), workspace_id: Some("w1".into()), ..Default::default() },
             item: None,
+            item_vars: vec![],
             palette_pane: None,
         };
         plan.command.run = "git switch {{input.branch}} # {{ctx.dir}} {{ctx.workspace_id}}".into();
@@ -513,6 +499,9 @@ mod tests {
         let env = plan.env();
         assert_eq!(env.get("RAYCAST_INPUT_BRANCH").map(String::as_str), Some("feat"));
         assert_eq!(env.get("RAYCAST_CTX_DIR").map(String::as_str), Some("/tmp/x"));
+        plan.item_vars = vec![("item.session_id".into(), "abc".into())];
+        assert_eq!(plan.render("{{item.session_id}}"), "abc");
+        assert_eq!(plan.env().get("RAYCAST_ITEM_SESSION_ID").map(String::as_str), Some("abc"));
     }
 
     #[test]

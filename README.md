@@ -56,6 +56,7 @@ title = "Terraform plan"
 description = "Plan the stack in this directory"   # optional, shown in the preview; may use markdown (headings, lists, `code`, **bold**, fences)
 run = "terraform plan"
 in = "split"              # background | current-pane | split | tab | workspace | popup
+# on = ["agent"]          # also an action on these rows: workspace | tab | pane | agent
 
 [[commands.inputs]]
 name = "target"
@@ -64,13 +65,13 @@ kind = "choice"           # text | choice | workspace | tab | pane | agent | ref
 choices_command = "terraform state list"
 ```
 
-`run` sees `{{input.<name>}}`, `{{ctx.dir}}`, `{{ctx.workspace_id}}`, `{{ctx.tab_id}}`, `{{ctx.pane_id}}`, `{{ctx.agent}}`, `{{item.id}}`, and the same values as `RAYCAST_*` env vars. A relative `run` path resolves next to the Command File. Scripts can call any socket method with `herdr-raycast api <method> [json]`.
+`run` sees `{{input.<name>}}`, `{{ctx.dir}}`, `{{ctx.workspace_id}}`, `{{ctx.tab_id}}`, `{{ctx.pane_id}}`, `{{ctx.agent}}`, the `{{item.*}}` vars below, and the same values as `RAYCAST_*` env vars. A relative `run` path resolves next to the Command File. Scripts can call any socket method with `herdr-raycast api <method> [json]`.
 
 "New command file for this directory" writes a scoped template and opens it; "Edit command files" picks one. Both use `nvim-open` when on PATH, else `$EDITOR` in a popup.
 
-## Yeet
+## Item actions
 
-`Yeet` forks the current Claude conversation into a new tab and has the fork run `/yeet-task`, optionally with an extra instruction, so the original session is never interrupted. The fork closes its tab when done. If it needs input it renames the tab to `yeet: needs input` and sends a Herdr notification. Available as a command and as an action on agent rows.
+A Command File command with `on = ["agent"]` (any of `workspace`, `tab`, `pane`, `agent`) also appears in the ctrl+o action menu of those rows. Run from the Commands list, it acts on the captured pane's agent (or the tab's only agent), pane, tab or workspace. The command learns about the item through `{{item.kind}}`, `{{item.id}}`, `{{item.workspace_id}}`, `{{item.tab_id}}`, `{{item.pane_id}}`, `{{item.label}}`, `{{item.cwd}}`, `{{item.agent}}`, `{{item.agent_kind}}` and `{{item.session_id}}` (the Claude session id), and the matching `RAYCAST_ITEM_*` env vars. That is enough to write a Claude conversation fork as a shell script; a `yeet` command that does so lives in the author's dotfiles.
 
 ## Ranking
 

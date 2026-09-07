@@ -47,3 +47,13 @@ name = "branch"
 prompt = "Branch"
 kind = "choice"
 choices_command = "git branch --format=%(refname:short)"
+
+[[commands]]
+id = "shell-at-agent"
+title = "Shell tab at this agent's directory"
+description = "Also offered on agent and pane rows; from the list it uses the agent in the current pane."
+on = ["agent", "pane"]
+run = ""
+in = "tab"
+cwd = "{{item.cwd}}"
+label = "{{item.label}}"

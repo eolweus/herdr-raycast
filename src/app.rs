@@ -1,6 +1,6 @@
 use crate::commands::builtins::{self, Builtin};
 use crate::commands::run::{self, ItemRef, Plan, Runtime};
-use crate::commands::{resolve, Class, Command, Input, InputKind};
+use crate::commands::{resolve, Class, Command, Input, InputKind, ItemKind};
 use crate::config::{self, Config};
 use crate::context::Captured;
 use crate::herdr::{AgentStatus, Client, Snapshot};
@@ -115,6 +115,16 @@ impl Kind {
 }
 
 // Herdr's generated tab labels ("1 · dir › agent › title") fuzzy-match almost any query.
+fn item_kind(k: &Kind) -> Option<ItemKind> {
+    match k {
+        Kind::Workspace => Some(ItemKind::Workspace),
+        Kind::Tab => Some(ItemKind::Tab),
+        Kind::Pane => Some(ItemKind::Pane),
+        Kind::Agent => Some(ItemKind::Agent),
+        Kind::Command(_) => None,
+    }
+}
+
 fn manual_tab_label(t: &crate::herdr::Tab) -> Option<String> {
     let auto = t.label.split_once(" · ").is_some_and(|(n, _)| n.parse::<u32>().is_ok());
     (!auto && !t.label.is_empty()).then(|| t.label.clone())
@@ -639,6 +649,14 @@ impl App {
     }
 
     pub fn actions_for(&self, item: &Item) -> Vec<(Command, Option<ItemRef>)> {
+        let mut v = self.builtin_actions_for(item);
+        if let Some(kind) = item_kind(&item.kind) {
+            v.extend(self.commands.iter().filter(|c| c.on.contains(&kind)).map(|c| (c.clone(), item.item_ref.clone())));
+        }
+        v
+    }
+
+    fn builtin_actions_for(&self, item: &Item) -> Vec<(Command, Option<ItemRef>)> {
         use Builtin::*;
         let r = item.item_ref.clone();
         let mk = |b: Builtin, t: &str| (builtins::item_action(b, t), r.clone());
@@ -652,7 +670,7 @@ impl App {
                 v.push(mk(ClosePane, "Close pane"));
                 v
             }
-            Kind::Agent => vec![mk(FocusAgent, "Focus"), mk(Yeet, "Yeet"), mk(RenameAgent, "Rename"), mk(StartAgent, "Start agent in split"), mk(ClosePane, "Close pane")],
+            Kind::Agent => vec![mk(FocusAgent, "Focus"), mk(RenameAgent, "Rename"), mk(StartAgent, "Start agent in split"), mk(ClosePane, "Close pane")],
             Kind::Command(i) => {
                 let c = &self.commands[i];
                 let mut v = vec![(c.clone(), None)];
@@ -674,8 +692,41 @@ impl App {
     }
 
     fn start_command(&mut self, command: Command, item: Option<ItemRef>) {
+        let item = match item {
+            None if !command.on.is_empty() => match self.implicit_item(&command.on) {
+                Some(i) => Some(i),
+                None => {
+                    let kinds: Vec<&str> = command.on.iter().map(|k| k.label()).collect();
+                    self.status = Some(format!("error: no {} in the current context", kinds.join(" or ")));
+                    return;
+                }
+            },
+            other => other,
+        };
         let draft = Draft { command, item, answers: HashMap::new() };
         self.advance(draft, 0);
+    }
+
+    /// The Item an `on` Command acts on when run from the list: the captured pane's agent (or the
+    /// tab's only agent), else the captured pane, tab or workspace, in the order `on` lists them.
+    fn implicit_item(&self, on: &[ItemKind]) -> Option<ItemRef> {
+        let s = &self.snapshot;
+        let ctx = &self.ctx;
+        let pane = ctx.pane_id.as_deref().and_then(|p| s.pane(p));
+        on.iter().find_map(|k| match k {
+            ItemKind::Agent => {
+                let a = pane.and_then(|p| s.agent_in_pane(&p.pane_id)).or_else(|| {
+                    let tab = pane.map(|p| p.tab_id.as_str())?;
+                    let mut in_tab = s.agents.iter().filter(|a| a.tab_id == tab);
+                    let one = in_tab.next()?;
+                    in_tab.next().is_none().then_some(one)
+                })?;
+                Some(ItemRef::Agent { pane_id: a.pane_id.clone(), target: a.target().to_string(), workspace_id: a.workspace_id.clone() })
+            }
+            ItemKind::Pane => pane.map(|p| ItemRef::Pane { pane_id: p.pane_id.clone(), tab_id: p.tab_id.clone(), workspace_id: p.workspace_id.clone(), has_agent: s.agent_in_pane(&p.pane_id).is_some() }),
+            ItemKind::Tab => pane.map(|p| ItemRef::Tab { tab_id: p.tab_id.clone(), workspace_id: p.workspace_id.clone() }),
+            ItemKind::Workspace => ctx.workspace_id.clone().map(ItemRef::Workspace),
+        })
     }
 
     fn advance(&mut self, draft: Draft, step: usize) {
@@ -704,7 +755,8 @@ impl App {
         if let Class::Builtin(Builtin::EditCommandFiles) = command.class {
             command.cwd = None;
         }
-        let plan = Plan { command, answers, ctx: self.ctx.clone(), item: draft.item, palette_pane: self.palette_pane.clone() };
+        let item_vars = draft.item.as_ref().map(|i| run::item_vars(&self.snapshot, i)).unwrap_or_default();
+        let plan = Plan { command, answers, ctx: self.ctx.clone(), item: draft.item, item_vars, palette_pane: self.palette_pane.clone() };
         if plan.command.keep_open {
             let rt = Runtime { client: &self.client, cfg: &self.cfg, plugin_id: self.plugin_id.clone() };
             match run::execute(&plan, &rt) {

@@ -166,13 +166,7 @@ impl Client {
         self.call("pane.close", json!({"pane_id": id})).map(|_| ())
     }
     pub fn start_agent(&self, name: &str, kind: &str, pane_id: &str) -> Result<()> {
-        self.start_agent_args(name, kind, pane_id, &[])
-    }
-    pub fn start_agent_args(&self, name: &str, kind: &str, pane_id: &str, args: &[String]) -> Result<()> {
-        self.call("agent.start", json!({"name": name, "kind": kind, "pane_id": pane_id, "args": args})).map(|_| ())
-    }
-    pub fn prompt_agent(&self, target: &str, text: &str) -> Result<()> {
-        self.call("agent.prompt", json!({"target": target, "text": text})).map(|_| ())
+        self.call("agent.start", json!({"name": name, "kind": kind, "pane_id": pane_id})).map(|_| ())
     }
     pub fn notify(&self, title: &str, body: Option<&str>) {
         let _ = self.call("notification.show", json!({"title": title, "body": body}));

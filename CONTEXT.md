@@ -17,7 +17,7 @@ One row in a View. An Item is a Workspace, Tab, Pane, Agent or Command.
 _Avoid_: entry, row, result
 
 **Command**:
-An Item the Palette can run. One of three classes: Built-in (native, shipped with the plugin), Plugin Action (declared by any installed Herdr plugin's manifest), or User-defined (declared in a Command File).
+An Item the Palette can run. One of three classes: Built-in (native, shipped with the plugin), Plugin Action (declared by any installed Herdr plugin's manifest), or User-defined (declared in a Command File). A User-defined Command may declare `on` and then also serves as an Item action for those Item kinds.
 _Avoid_: action on its own (Herdr's manifest concept is a Plugin Action here), quick action, task
 
 **Target**:
