@@ -161,7 +161,7 @@ fn rows(app: &App) -> (Vec<Row>, Vec<Display>, usize) {
                 let hays: Vec<Vec<String>> = options.iter().map(|(v, l)| vec![l.clone(), v.clone()]).collect();
                 let mut s = crate::search::Search::default();
                 let idx = s.rank(query, hays.iter().map(|v| v.as_slice()));
-                (idx.into_iter().map(|i| plain(0, options[i].1.clone(), dim_meta(options[i].0.clone()))).collect(), *cursor)
+                (idx.into_iter().map(|i| plain(0, options[i].1.clone(), if options[i].0 == options[i].1 { vec![] } else { dim_meta(options[i].0.clone()) })).collect(), *cursor)
             }
         }
         Some(Flow::Confirm { draft }) => {
