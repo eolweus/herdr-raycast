@@ -645,7 +645,7 @@ impl App {
                 v.push(mk(ClosePane, "Close pane"));
                 v
             }
-            Kind::Agent => vec![mk(FocusAgent, "Focus"), mk(RenameAgent, "Rename"), mk(StartAgent, "Start agent in split"), mk(ClosePane, "Close pane")],
+            Kind::Agent => vec![mk(FocusAgent, "Focus"), mk(Yeet, "Yeet"), mk(RenameAgent, "Rename"), mk(StartAgent, "Start agent in split"), mk(ClosePane, "Close pane")],
             Kind::Command(i) => {
                 let c = &self.commands[i];
                 let mut v = vec![(c.clone(), None)];

@@ -40,6 +40,10 @@ Header shows the View tabs with their numbers and the Context Directory. Preview
 - **Workspaces**: the Herdr navigator tree. `▾` on workspace rows, `├──`/`└──` with `│` spines under children, a blank line between workspaces, `◆` on the captured workspace and pane. Tab rows appear only when a workspace has more than one tab. Pane rows are labeled by manual label, agent name, terminal title, agent kind, else "shell". A query orders workspaces by their best match, keeps tree order inside each, and shows ancestors of matches dimmed.
 - **Commands**: all three classes, with class and source shown. With no query, the most used come first.
 
+## Yeet
+
+`Yeet` (Command, and an action on Agent rows) hands work off without interrupting the session. It takes the Claude agent in the palette's pane, or the only Claude agent in that tab, reads its session id from the Herdr snapshot, opens an unfocused tab labeled `yeet` in the same workspace and cwd, starts `claude --resume <id> --fork-session` there through `agent.start`, and prompts the fork to run `/yeet-task` with the optional instruction, without asking for confirmation. The fork closes its own tab when yeet-spawn has reported; on failure or a real need for input it renames the tab to `yeet: needs input` and shows a Herdr notification. A lingering `yeet` tab therefore means attention is needed. `/yeet-fork` is not offered: it relies on the spawned worker reporting back to the calling pane, which for a fork no longer exists.
+
 ## Ranking
 
 Every item has search fields; the first is its title. A match is tiered: exact, whole word, prefix, substring, fuzzy, with any title match above any match in another field. Within a tier, items used more often (every Enter is counted in `usage.json` in the state dir) come first, then nucleo's score. Herdr's generated tab labels (`1 · dir › agent › title`) are not search fields because they fuzzy-match almost anything.
@@ -124,7 +128,7 @@ Context Directory: focused pane's live cwd (process-info of the foreground proce
 
 ### Built-ins in v1
 
-new workspace, new worktree, new tab, rename workspace, rename tab, rename agent, close workspace, close tab, close pane, start agent in new pane, run herdr-nvim pick-file, Edit Command Files, New Command File for this directory.
+new workspace, new worktree, new tab, rename workspace, rename tab, rename agent, yeet, close workspace, close tab, close pane, start agent in new pane, run herdr-nvim pick-file, Edit Command Files, New Command File for this directory.
 
 New Command File takes a name, sanitizes it to `[a-z0-9-]`, writes `commands/<name>.toml` with `scope` set to the Context Directory, then opens it. Editing uses `nvim-open <file>` when found on PATH, else `$EDITOR <file>` in a popup Target. An `examples/` directory ships shell equivalents of the Built-ins.
 

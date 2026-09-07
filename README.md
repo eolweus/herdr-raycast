@@ -67,6 +67,10 @@ choices_command = "terraform state list"
 
 "New command file for this directory" writes a scoped template and opens it; "Edit command files" picks one. Both use `nvim-open` when on PATH, else `$EDITOR` in a popup.
 
+## Yeet
+
+`Yeet` forks the current Claude conversation into a new tab and has the fork run `/yeet-task`, optionally with an extra instruction, so the original session is never interrupted. The fork closes its tab when done. If it needs input it renames the tab to `yeet: needs input` and sends a Herdr notification. Available as a command and as an action on agent rows.
+
 ## Ranking
 
 Exact matches beat prefix and fuzzy ones, and a hit in the title beats a hit in the workspace or path. Every Enter is counted in `usage.json` in the state dir, and better-used items win ties. Delete that file to reset.
