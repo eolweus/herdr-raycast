@@ -258,7 +258,10 @@ fn builtin(b: Builtin, plan: &Plan, rt: &Runtime) -> Result<String> {
                 Some(ItemRef::Agent { target, .. }) => target.clone(),
                 _ => plan.get("agent").ok_or_else(|| anyhow!("no agent"))?,
             };
-            let name = plan.get("name").ok_or_else(|| anyhow!("name required"))?;
+            let name = agent_slug(&plan.get("name").unwrap_or_default());
+            if name.is_empty() {
+                bail!("name required");
+            }
             c.rename_agent(&target, &name)?;
             Ok(format!("renamed to {name}"))
         }
@@ -347,7 +350,8 @@ pub fn shell_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\\''"))
 }
 
-pub fn agent_name(raw: &str) -> String {
+/// Herdr agent names: `[a-z][a-z0-9_-]*`, at most 32 chars. Empty when nothing usable remains.
+pub fn agent_slug(raw: &str) -> String {
     let mut out = String::new();
     for c in raw.trim().chars().map(|c| c.to_ascii_lowercase()) {
         if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
@@ -357,7 +361,16 @@ pub fn agent_name(raw: &str) -> String {
         }
     }
     let out = out.trim_matches('-').to_string();
-    let mut out = if out.chars().next().is_some_and(|c| c.is_ascii_lowercase()) { out } else { format!("a{out}") };
+    let mut out = if out.is_empty() || out.chars().next().is_some_and(|c| c.is_ascii_lowercase()) { out } else { format!("a{out}") };
+    out.truncate(32);
+    out
+}
+
+pub fn agent_name(raw: &str) -> String {
+    let mut out = agent_slug(raw);
+    if out.is_empty() {
+        out.push('a');
+    }
     out.truncate(26);
     let suffix = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() % 10000).unwrap_or(0);
     format!("{out}-{suffix:04}")
@@ -448,5 +461,7 @@ mod tests {
         assert!(n.starts_with("my-agent-"));
         assert!(n.len() <= 32);
         assert!(agent_name("9x").starts_with("a9x"));
+        assert_eq!(agent_slug("Spain Outreach"), "spain-outreach");
+        assert_eq!(agent_slug("!!"), "");
     }
 }
