@@ -60,16 +60,60 @@ pub enum Kind {
     Command(usize),
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Tone {
+    Dim,
+    Path,
+    Agent,
+    Workspace,
+    Status(AgentStatus),
+}
+
+#[derive(Clone, Debug)]
+pub struct Seg(pub String, pub Tone);
+
 #[derive(Clone, Debug)]
 pub struct Item {
     pub kind: Kind,
     pub id: String,
     pub title: String,
-    pub meta: String,
+    pub meta: Vec<Seg>,
     pub status: Option<AgentStatus>,
     pub depth: u8,
+    pub current: bool,
     pub hay: Vec<String>,
     pub item_ref: Option<ItemRef>,
+}
+
+impl Kind {
+    pub fn section(&self) -> (usize, &'static str) {
+        match self {
+            Kind::Agent => (0, "Agents"),
+            Kind::Workspace | Kind::Tab | Kind::Pane => (1, "Workspaces"),
+            Kind::Command(_) => (2, "Commands"),
+        }
+    }
+}
+
+fn seg(text: impl Into<String>, tone: Tone) -> Seg {
+    Seg(text.into(), tone)
+}
+
+fn activity(statuses: impl Iterator<Item = AgentStatus>) -> Vec<Seg> {
+    let (mut blocked, mut working, mut done) = (0, 0, 0);
+    for s in statuses {
+        match s {
+            AgentStatus::Blocked => blocked += 1,
+            AgentStatus::Working => working += 1,
+            AgentStatus::Done => done += 1,
+            _ => {}
+        }
+    }
+    let mut out = vec![];
+    if blocked > 0 { out.push(seg(format!("{blocked} blocked"), Tone::Status(AgentStatus::Blocked))); }
+    if working > 0 { out.push(seg(format!("{working} working"), Tone::Status(AgentStatus::Working))); }
+    if done > 0 { out.push(seg(format!("{done} done"), Tone::Status(AgentStatus::Done))); }
+    out
 }
 
 #[derive(Clone, Debug)]
@@ -98,6 +142,7 @@ pub struct App {
     pub query: String,
     pub items: Vec<Item>,
     pub filtered: Vec<usize>,
+    pub context: Vec<bool>,
     pub cursor: usize,
     pub preview: bool,
     pub preview_cache: Option<(String, String, Instant)>,
@@ -134,6 +179,7 @@ impl App {
             query: String::new(),
             items: vec![],
             filtered: vec![],
+            context: vec![],
             cursor: 0,
             preview: st.preview,
             preview_cache: None,
@@ -188,7 +234,41 @@ impl App {
 
     fn apply_filter(&mut self) {
         let hays: Vec<&[String]> = self.items.iter().map(|i| i.hay.as_slice()).collect();
-        self.filtered = self.search.rank(&self.query, hays.into_iter());
+        let ranked = self.search.rank(&self.query, hays.into_iter());
+        self.context.clear();
+        if self.query.trim().is_empty() {
+            self.filtered = ranked;
+        } else if self.view == View::Workspaces {
+            // Keep tree order; ancestors of a match stay as dimmed context.
+            let matched: std::collections::HashSet<usize> = ranked.into_iter().collect();
+            let mut keep = vec![false; self.items.len()];
+            for &i in &matched {
+                keep[i] = true;
+                let mut depth = self.items[i].depth;
+                for j in (0..i).rev() {
+                    if depth == 0 {
+                        break;
+                    }
+                    if self.items[j].depth < depth {
+                        keep[j] = true;
+                        depth = self.items[j].depth;
+                    }
+                }
+            }
+            self.filtered = (0..self.items.len()).filter(|&i| keep[i]).collect();
+            self.context = self.filtered.iter().map(|i| !matched.contains(i)).collect();
+            if self.cursor == 0 {
+                if let Some(p) = self.context.iter().position(|c| !c) {
+                    self.cursor = p;
+                }
+            }
+        } else if self.view == View::All {
+            let mut v = ranked;
+            v.sort_by_key(|&i| self.items[i].kind.section().0);
+            self.filtered = v;
+        } else {
+            self.filtered = ranked;
+        }
         if self.cursor >= self.filtered.len() {
             self.cursor = self.filtered.len().saturating_sub(1);
         }
@@ -207,11 +287,22 @@ impl App {
                 let ws = self.snapshot.workspace_label(&a.workspace_id);
                 let title = a.terminal_title_stripped.clone().or_else(|| a.title.clone()).unwrap_or_default();
                 let kind = a.display_agent.clone().or_else(|| a.agent.clone()).unwrap_or_default();
-                let (row_title, meta) = match &a.name {
-                    Some(n) => (n.clone(), format!("{title}  ·  {ws}")),
-                    None if !title.is_empty() => (title.clone(), format!("{kind}  ·  {ws}")),
-                    None => (kind.clone(), ws.clone()),
+                let mut meta = vec![];
+                let row_title = match &a.name {
+                    Some(n) => {
+                        if !title.is_empty() && title != *n {
+                            meta.push(seg(title.clone(), Tone::Dim));
+                        }
+                        n.clone()
+                    }
+                    None if !title.is_empty() => title.clone(),
+                    None => kind.clone(),
                 };
+                if !kind.is_empty() {
+                    meta.push(seg(kind.clone(), Tone::Agent));
+                }
+                meta.push(seg(a.agent_status.label(), Tone::Status(a.agent_status)));
+                meta.push(seg(ws.clone(), Tone::Workspace));
                 Item {
                     kind: Kind::Agent,
                     id: format!("agent:{}", a.pane_id),
@@ -219,6 +310,7 @@ impl App {
                     meta,
                     status: Some(a.agent_status),
                     depth: 0,
+                    current: self.ctx.pane_id.as_deref() == Some(a.pane_id.as_str()),
                     hay: vec![a.display_name(), title, ws, kind],
                     item_ref: Some(ItemRef::Agent { pane_id: a.pane_id.clone(), target: a.target().to_string(), workspace_id: a.workspace_id.clone() }),
                 }
@@ -226,24 +318,30 @@ impl App {
             .collect()
     }
 
-    fn workspace_row(&self, w: &crate::herdr::Workspace) -> Item {
-        let dir = w
-            .worktree
+    fn workspace_dir(&self, w: &crate::herdr::Workspace) -> String {
+        w.worktree
             .as_ref()
             .map(|wt| wt.checkout_path.clone())
             .or_else(|| w.cwd.clone())
             .or_else(|| self.snapshot.panes.iter().find(|p| p.workspace_id == w.workspace_id).and_then(|p| p.cwd.clone()))
-            .map(|p| crate::context::shorten_home(std::path::Path::new(&p)))
-            .unwrap_or_default();
-        let tabs = self.snapshot.tabs.iter().filter(|t| t.workspace_id == w.workspace_id).count();
-        let meta = if dir.is_empty() { format!("{tabs} tabs") } else { format!("{tabs} tabs  ·  {dir}") };
+            .unwrap_or_default()
+    }
+
+    fn workspace_row(&self, w: &crate::herdr::Workspace) -> Item {
+        let dir = self.workspace_dir(w);
+        let panes: Vec<&crate::herdr::Pane> = self.snapshot.panes.iter().filter(|p| p.workspace_id == w.workspace_id).collect();
+        let mut meta = activity(panes.iter().filter(|p| self.snapshot.agent_in_pane(&p.pane_id).is_some()).map(|p| p.agent_status));
+        if !dir.is_empty() {
+            meta.push(seg(crate::context::short_path(&dir), Tone::Path));
+        }
         Item {
             kind: Kind::Workspace,
             id: format!("ws:{}", w.workspace_id),
-            title: w.label.clone(),
+            title: format!("{} ({})", w.label, panes.len()),
             meta,
-            status: Some(w.agent_status),
+            status: None,
             depth: 0,
+            current: self.ctx.workspace_id.as_deref() == Some(w.workspace_id.as_str()),
             hay: vec![w.label.clone(), dir.rsplit('/').next().unwrap_or("").to_string()],
             item_ref: Some(ItemRef::Workspace(w.workspace_id.clone())),
         }
@@ -253,33 +351,54 @@ impl App {
         let mut out = vec![];
         for w in &self.snapshot.workspaces {
             out.push(self.workspace_row(w));
-            for t in self.snapshot.tabs.iter().filter(|t| t.workspace_id == w.workspace_id) {
-                out.push(Item {
-                    kind: Kind::Tab,
-                    id: format!("tab:{}", t.tab_id),
-                    title: t.label.clone(),
-                    meta: format!("{} panes  ·  {}", t.pane_count, w.label),
-                    status: Some(t.agent_status),
-                    depth: 1,
-                    hay: vec![t.label.clone(), w.label.clone()],
-                    item_ref: Some(ItemRef::Tab { tab_id: t.tab_id.clone(), workspace_id: w.workspace_id.clone() }),
-                });
-                for p in self.snapshot.panes.iter().filter(|p| p.tab_id == t.tab_id) {
+            let tabs: Vec<&crate::herdr::Tab> = self.snapshot.tabs.iter().filter(|t| t.workspace_id == w.workspace_id).collect();
+            let show_tabs = tabs.len() > 1;
+            for t in tabs {
+                let panes: Vec<&crate::herdr::Pane> = self.snapshot.panes.iter().filter(|p| p.tab_id == t.tab_id).collect();
+                if show_tabs {
+                    let mut meta = vec![seg(format!("{} panes", panes.len()), Tone::Dim)];
+                    meta.extend(activity(panes.iter().filter(|p| self.snapshot.agent_in_pane(&p.pane_id).is_some()).map(|p| p.agent_status)));
+                    out.push(Item {
+                        kind: Kind::Tab,
+                        id: format!("tab:{}", t.tab_id),
+                        title: t.label.clone(),
+                        meta,
+                        status: None,
+                        depth: 1,
+                        current: false,
+                        hay: vec![t.label.clone(), w.label.clone()],
+                        item_ref: Some(ItemRef::Tab { tab_id: t.tab_id.clone(), workspace_id: w.workspace_id.clone() }),
+                    });
+                }
+                for p in panes {
                     let agent = self.snapshot.agent_in_pane(&p.pane_id);
-                    let name = agent
-                        .map(|a| a.display_name())
-                        .or_else(|| p.label.clone())
-                        .or_else(|| p.terminal_title_stripped.clone())
+                    let name = p
+                        .label
+                        .clone()
+                        .or_else(|| agent.and_then(|a| a.name.clone()))
+                        .or_else(|| p.terminal_title_stripped.clone().filter(|t| !t.is_empty()))
+                        .or_else(|| agent.and_then(|a| a.display_agent.clone().or_else(|| a.agent.clone())))
                         .unwrap_or_else(|| "shell".into());
-                    let cwd = p.foreground_cwd.clone().or_else(|| p.cwd.clone()).map(|c| crate::context::shorten_home(std::path::Path::new(&c))).unwrap_or_default();
+                    let cwd = p.foreground_cwd.clone().or_else(|| p.cwd.clone()).unwrap_or_default();
+                    let mut meta = vec![];
+                    if let Some(a) = agent {
+                        if let Some(k) = a.display_agent.clone().or_else(|| a.agent.clone()) {
+                            meta.push(seg(k, Tone::Agent));
+                        }
+                        meta.push(seg(p.agent_status.label(), Tone::Status(p.agent_status)));
+                    }
+                    if !cwd.is_empty() {
+                        meta.push(seg(crate::context::short_path(&cwd), Tone::Path));
+                    }
                     out.push(Item {
                         kind: Kind::Pane,
                         id: format!("pane:{}", p.pane_id),
                         title: name.clone(),
-                        meta: format!("{cwd}  ·  {} › {}", w.label, t.label),
-                        status: Some(p.agent_status),
-                        depth: 2,
-                        hay: vec![name, t.label.clone(), w.label.clone()],
+                        meta,
+                        status: agent.map(|_| p.agent_status),
+                        depth: if show_tabs { 2 } else { 1 },
+                        current: self.ctx.pane_id.as_deref() == Some(p.pane_id.as_str()),
+                        hay: vec![name, t.label.clone(), w.label.clone(), cwd.rsplit('/').next().unwrap_or("").to_string()],
                         item_ref: Some(ItemRef::Pane { pane_id: p.pane_id.clone(), tab_id: t.tab_id.clone(), workspace_id: w.workspace_id.clone(), has_agent: agent.is_some() }),
                     });
                 }
@@ -296,9 +415,10 @@ impl App {
                 kind: Kind::Command(i),
                 id: format!("cmd:{}", c.id),
                 title: c.title.clone(),
-                meta: format!("{}  ·  {}", c.class.label(), c.source.rsplit('/').next().unwrap_or(&c.source)),
+                meta: vec![seg(c.class.label(), Tone::Agent), seg(c.source.rsplit('/').next().unwrap_or(&c.source), Tone::Dim)],
                 status: None,
                 depth: 0,
+                current: false,
                 hay: c.search_text(),
                 item_ref: None,
             })
@@ -306,11 +426,8 @@ impl App {
     }
 
     fn all_items(&self) -> Vec<Item> {
-        let agents = self.agent_items();
-        let (urgent, rest): (Vec<Item>, Vec<Item>) = agents.into_iter().partition(|a| a.status.is_some_and(|s| s.priority() <= 1));
-        let mut out = urgent;
+        let mut out = self.agent_items();
         out.extend(self.snapshot.workspaces.iter().map(|w| self.workspace_row(w)));
-        out.extend(rest);
         out.extend(self.command_items());
         out
     }

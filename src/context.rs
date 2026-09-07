@@ -107,3 +107,13 @@ pub fn shorten_home(p: &Path) -> String {
     }
     s.into_owned()
 }
+
+// Last two components, "…/" when more were dropped; short paths stay whole.
+pub fn short_path(s: &str) -> String {
+    let s = shorten_home(Path::new(s));
+    let parts: Vec<&str> = s.split('/').filter(|p| !p.is_empty()).collect();
+    if parts.len() <= 3 {
+        return s;
+    }
+    format!("…/{}", parts[parts.len() - 2..].join("/"))
+}

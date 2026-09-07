@@ -35,12 +35,12 @@ Header shows the View tabs with their numbers and the Context Directory. Preview
 
 ## Views
 
-- **All**: workspaces, agents, Commands. No tabs or panes.
-- **Agents**: flat list, workspace in a right-aligned column, sorted blocked, done, working, idle, unknown, then Herdr order.
-- **Workspaces**: fully expanded workspace > tab > pane tree. Pane rows labeled by agent name, else foreground process. A query flattens the tree to matching rows with their parent path.
+- **All**: three sections with a header line each: Agents, Workspaces (no tabs or panes), Commands. A query ranks within each section and hides empty sections.
+- **Agents**: flat list, sorted blocked, done, working, idle, unknown, then Herdr order.
+- **Workspaces**: the Herdr navigator tree. `▾` on workspace rows, `├──`/`└──` with `│` spines under children, a blank line between workspaces, `◆` on the captured workspace and pane. Tab rows appear only when a workspace has more than one tab. Pane rows are labeled by manual label, agent name, terminal title, agent kind, else "shell". A query keeps tree order and shows ancestors of matches dimmed.
 - **Commands**: all three classes, with class and source shown.
 
-Empty-query order in All: blocked and done agents first, then workspaces in Herdr order, remaining agents, Commands alphabetical. Frecency later.
+Status glyphs appear only on agents and on panes running an agent; workspace and tab rows carry an activity summary ("1 blocked · 2 working") in their meta instead. Meta is a list of colored segments: paths cyan, agent kind magenta, workspace blue, status in its status color, the rest dim. Paths show their last two components. The header shows the captured workspace and Context Directory in the same colors, bold.
 
 Fuzzy match fields: workspace label and directory name; tab label plus workspace label; pane agent name or process plus tab and workspace; agent name, title, workspace; Command title, id, keywords, plugin id.
 
