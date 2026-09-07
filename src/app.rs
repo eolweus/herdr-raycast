@@ -120,22 +120,6 @@ fn manual_tab_label(t: &crate::herdr::Tab) -> Option<String> {
     (!auto && !t.label.is_empty()).then(|| t.label.clone())
 }
 
-fn wrap(text: &str, width: usize) -> Vec<String> {
-    let mut lines = vec![String::new()];
-    for word in text.split_whitespace() {
-        let cur = lines.last_mut().unwrap();
-        if !cur.is_empty() && cur.chars().count() + 1 + word.chars().count() > width {
-            lines.push(word.to_string());
-        } else {
-            if !cur.is_empty() {
-                cur.push(' ');
-            }
-            cur.push_str(word);
-        }
-    }
-    lines
-}
-
 fn seg(text: impl Into<String>, tone: Tone) -> Seg {
     Seg(text.into(), tone)
 }
@@ -881,32 +865,34 @@ impl App {
         }
     }
 
-    /// Lines for the preview panel of the selected Item.
-    pub fn preview_lines(&self, width: usize) -> Vec<String> {
+    /// Styled lines for the preview panel of the selected Item.
+    pub fn preview_lines(&self, width: usize) -> Vec<Vec<Seg>> {
         let Some(item) = self.selected() else { return vec![] };
         let s = &self.snapshot;
+        let path = |c: &str| seg(crate::context::shorten_home(std::path::Path::new(c)), Tone::Path);
         match (&item.kind, &item.item_ref) {
             (Kind::Agent, Some(ItemRef::Agent { pane_id, .. })) | (Kind::Pane, Some(ItemRef::Pane { pane_id, .. })) => {
                 let mut lines = vec![];
                 if let Some(a) = s.agent_in_pane(pane_id) {
-                    lines.push(format!("{} {}  ({})", a.agent_status.glyph(), a.display_name(), a.status_text()));
-                    lines.push(format!("workspace: {}", s.workspace_label(&a.workspace_id)));
+                    let st = Tone::Status(a.agent_status);
+                    lines.push(vec![seg(a.agent_status.glyph(), st), seg(" ", Tone::Plain), seg(a.display_name(), Tone::Title), seg("  ", Tone::Plain), seg(a.status_text(), st)]);
+                    lines.push(field("workspace", seg(s.workspace_label(&a.workspace_id), Tone::Workspace)));
                     if let Some(c) = a.foreground_cwd.as_ref().or(a.cwd.as_ref()) {
-                        lines.push(format!("cwd: {}", crate::context::shorten_home(std::path::Path::new(c))));
+                        lines.push(field("cwd", path(c)));
                     }
                     if let Some(t) = &a.terminal_title_stripped {
-                        lines.push(format!("title: {t}"));
+                        lines.push(field("title", seg(t, Tone::Plain)));
                     }
                 } else if let Some(p) = s.pane(pane_id) {
-                    lines.push(format!("pane {}", p.pane_id));
+                    lines.push(vec![seg("pane ", Tone::Dim), seg(&p.pane_id, Tone::Title)]);
                     if let Some(c) = p.foreground_cwd.as_ref().or(p.cwd.as_ref()) {
-                        lines.push(format!("cwd: {}", crate::context::shorten_home(std::path::Path::new(c))));
+                        lines.push(field("cwd", path(c)));
                     }
                 }
-                lines.push(String::new());
                 if let Some((id, text, _)) = &self.preview_cache {
                     if id == pane_id {
-                        lines.extend(text.lines().map(|l| l.trim_end().to_string()));
+                        lines.push(rule(width));
+                        lines.extend(text.lines().map(|l| vec![seg(l.trim_end(), Tone::Plain)]));
                     }
                 }
                 lines
@@ -914,51 +900,61 @@ impl App {
             (Kind::Workspace, Some(ItemRef::Workspace(id))) => {
                 let mut lines = vec![];
                 if let Some(w) = s.workspace(id) {
-                    lines.push(format!("{} {}", w.agent_status.glyph(), w.label));
+                    lines.push(vec![seg(w.agent_status.glyph(), Tone::Status(w.agent_status)), seg(" ", Tone::Plain), seg(&w.label, Tone::Title)]);
                     if let Some(wt) = &w.worktree {
-                        lines.push(format!("worktree: {}", crate::context::shorten_home(std::path::Path::new(&wt.checkout_path))));
-                        lines.push(format!("repo: {}", crate::context::shorten_home(std::path::Path::new(&wt.repo_root))));
+                        lines.push(field("worktree", path(&wt.checkout_path)));
+                        lines.push(field("repo", path(&wt.repo_root)));
                     }
-                    lines.push(String::new());
+                    lines.push(vec![]);
                     for t in s.tabs.iter().filter(|t| t.workspace_id == *id) {
-                        lines.push(format!("{} {}  ({} panes)", t.agent_status.glyph(), t.label, t.pane_count));
+                        lines.push(vec![
+                            seg(t.agent_status.glyph(), Tone::Status(t.agent_status)),
+                            seg(" ", Tone::Plain),
+                            seg(&t.label, Tone::Plain),
+                            seg(format!("  {} panes", t.pane_count), Tone::Dim),
+                        ]);
                     }
                 }
                 lines
             }
-            (Kind::Tab, Some(ItemRef::Tab { tab_id, .. })) => {
-                let mut lines = vec![];
-                for p in s.panes.iter().filter(|p| p.tab_id == *tab_id) {
-                    let who = s.agent_in_pane(&p.pane_id).map(|a| a.display_name()).unwrap_or_else(|| "shell".into());
-                    lines.push(format!("{} {}  {}", p.agent_status.glyph(), p.pane_id, who));
-                }
-                lines
-            }
+            (Kind::Tab, Some(ItemRef::Tab { tab_id, .. })) => s
+                .panes
+                .iter()
+                .filter(|p| p.tab_id == *tab_id)
+                .map(|p| {
+                    let who = s.agent_in_pane(&p.pane_id).map(|a| seg(a.display_name(), Tone::Agent)).unwrap_or_else(|| seg("shell", Tone::Dim));
+                    vec![seg(p.agent_status.glyph(), Tone::Status(p.agent_status)), seg(" ", Tone::Plain), seg(&p.pane_id, Tone::Dim), seg("  ", Tone::Plain), who]
+                })
+                .collect(),
             (Kind::Command(i), _) => {
                 let c = &self.commands[*i];
-                let mut lines = vec![c.title.clone()];
+                let mut lines = vec![vec![seg(&c.title, Tone::Title)]];
                 if !c.description.is_empty() {
-                    lines.extend(wrap(&c.description, width.max(20)));
+                    lines.extend(crate::markdown::render(&c.description, width));
                 }
-                lines.push(String::new());
-                lines.extend([format!("id: {}", c.id), format!("class: {}", c.class.label()), format!("source: {}", c.source)]);
+                lines.push(vec![]);
+                lines.push(field("id", seg(&c.id, Tone::Plain)));
+                lines.push(field("class", seg(c.class.label(), Tone::Plain)));
+                lines.push(field("source", seg(&c.source, Tone::Plain)));
                 match &c.class {
                     Class::User { .. } => {
-                        lines.push(format!("in: {}", c.target.label()));
+                        lines.push(field("in", seg(c.target.label(), Tone::Plain)));
                         if let Some(cwd) = &c.cwd {
-                            lines.push(format!("cwd: {cwd}"));
+                            lines.push(field("cwd", seg(cwd, Tone::Path)));
                         }
-                        lines.push(String::new());
-                        lines.push(format!("$ {}", c.run));
+                        lines.push(vec![]);
+                        lines.push(vec![seg("$ ", Tone::Dim), seg(&c.run, Tone::Code)]);
                     }
-                    Class::PluginAction { plugin_id, action_id } => lines.push(format!("invokes {plugin_id}.{action_id} with the captured context")),
+                    Class::PluginAction { plugin_id, action_id } => {
+                        lines.push(vec![seg("invokes ", Tone::Dim), seg(format!("{plugin_id}.{action_id}"), Tone::Code), seg(" with the captured context", Tone::Dim)])
+                    }
                     Class::Builtin(_) => {}
                 }
                 if !c.inputs.is_empty() {
-                    lines.push(String::new());
-                    lines.push("inputs:".into());
+                    lines.push(vec![]);
+                    lines.push(vec![seg("inputs", Tone::Heading)]);
                     for i in &c.inputs {
-                        lines.push(format!("  {} ({:?})  {}", i.name, i.kind, i.prompt));
+                        lines.push(vec![seg("  ", Tone::Plain), seg(&i.name, Tone::Strong), seg(format!(" {:?}", i.kind).to_lowercase(), Tone::Dim), seg("  ", Tone::Plain), seg(&i.prompt, Tone::Plain)]);
                     }
                 }
                 lines
@@ -966,4 +962,12 @@ impl App {
             _ => vec![],
         }
     }
+}
+
+fn field(name: &str, value: Seg) -> Vec<Seg> {
+    vec![seg(format!("{name:<10}"), Tone::Dim), value]
+}
+
+fn rule(width: usize) -> Vec<Seg> {
+    vec![seg("─".repeat(width.max(1)), Tone::Rule)]
 }

@@ -31,7 +31,7 @@ Working name herdr-raycast, manifest id `erling.command-palette`, display name "
 └──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Header shows the View tabs with their numbers and the Context Directory. Preview splits the overlay roughly 50/50 when on.
+Header shows the View tabs with their numbers and the Context Directory. Preview splits the overlay roughly 50/50 when on. Agent and pane previews show colored metadata, a rule, then the pane tail; command previews render the description as markdown.
 
 ## Views
 
@@ -94,7 +94,7 @@ scope = "/home/erling/atlas/atlas-workspace/worktrees/main/infra/terraform"  # o
 [[commands]]
 id = "new-worktree"
 title = "New worktree"
-description = "Shown in the preview; also searched"  # optional
+description = "Shown in the preview; also searched"  # optional; markdown subset (headings, lists, `code`, **bold**, *em*, fences)
 keywords = ["wt", "branch"]
 run = "herdr worktree create --branch {{input.branch}} --base main --focus"
 in = "background"            # background | current-pane | split | tab | workspace | popup

@@ -373,17 +373,19 @@ fn draw_preview(f: &mut Frame, app: &App, area: Rect) {
     let lines = app.preview_lines(inner.width as usize);
     f.render_widget(block, area);
     let h = inner.height as usize;
-    let skip = lines.len().saturating_sub(h).min(if lines.len() > h { lines.len() - h } else { 0 });
-    let head: Vec<Line> = if lines.len() > h {
-        let keep_head = 5.min(lines.len());
-        let mut v: Vec<Line> = lines.iter().take(keep_head).map(|l| Line::from(l.as_str())).collect();
+    let to_line = |l: &Vec<Seg>| Line::from(l.iter().map(|s| Span::styled(s.0.clone(), tone_style(s.1))).collect::<Vec<_>>());
+    let shown: Vec<Line> = if lines.len() > h {
+        // Keep the metadata head, drop the middle, show the tail of the transcript.
+        let keep_head = 5.min(h.saturating_sub(2));
+        let tail = h.saturating_sub(keep_head + 1);
+        let mut v: Vec<Line> = lines.iter().take(keep_head).map(to_line).collect();
         v.push(Line::from(Span::styled("…", Style::default().fg(Color::DarkGray))));
-        v.extend(lines.iter().skip((skip + keep_head + 1).min(lines.len())).map(|l| Line::from(l.as_str())));
+        v.extend(lines.iter().skip(lines.len() - tail).map(to_line));
         v
     } else {
-        lines.iter().map(|l| Line::from(l.as_str())).collect()
+        lines.iter().map(to_line).collect()
     };
-    f.render_widget(Paragraph::new(head), inner);
+    f.render_widget(Paragraph::new(shown), inner);
 }
 
 fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
