@@ -738,6 +738,7 @@ impl App {
                 }
                 v
             }
+            InputKind::Ref => crate::git::base_refs(&self.ctx.dir).into_iter().map(|r| (r.clone(), r)).collect(),
             InputKind::Workspace => s.workspaces.iter().map(|w| (w.workspace_id.clone(), w.label.clone())).collect(),
             InputKind::Tab => s.tabs.iter().map(|t| (t.tab_id.clone(), format!("{} › {}", s.workspace_label(&t.workspace_id), t.label))).collect(),
             InputKind::Pane => s
@@ -801,7 +802,7 @@ impl App {
                             text.clone()
                         } else if let Some(&i) = filtered.get(cursor) {
                             options[i].0.clone()
-                        } else if !query.is_empty() && matches!(input.kind, InputKind::Choice) {
+                        } else if !query.is_empty() && matches!(input.kind, InputKind::Choice | InputKind::Ref) {
                             query.clone()
                         } else {
                             self.flow = Some(Flow::Input { draft, step, text, options, query, cursor });

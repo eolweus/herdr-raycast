@@ -2,6 +2,7 @@ mod app;
 mod commands;
 mod config;
 mod context;
+mod git;
 mod herdr;
 mod keys;
 mod search;

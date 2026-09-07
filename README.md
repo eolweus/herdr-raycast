@@ -59,7 +59,7 @@ in = "split"              # background | current-pane | split | tab | workspace 
 [[commands.inputs]]
 name = "target"
 prompt = "Target"
-kind = "choice"           # text | choice | workspace | tab | pane | agent
+kind = "choice"           # text | choice | workspace | tab | pane | agent | ref
 choices_command = "terraform state list"
 ```
 

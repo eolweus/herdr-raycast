@@ -45,7 +45,7 @@ pub fn all() -> Vec<Command> {
     use Builtin::*;
     vec![
         cmd(NewWorkspace, "new-workspace", "New workspace", &["ws", "create"], vec![Input::text("label", "Workspace label (empty = directory name)")]),
-        cmd(NewWorktree, "new-worktree", "New worktree", &["wt", "branch", "git"], vec![Input::text("branch", "Branch name"), Input::text("base", "Base ref (empty = current)")]),
+        cmd(NewWorktree, "new-worktree", "New worktree", &["wt", "branch", "git"], vec![Input::text("branch", "Branch name"), Input::pick("base", "Base ref", InputKind::Ref)]),
         cmd(NewTab, "new-tab", "New tab", &["tab"], vec![Input::text("label", "Tab label (optional)")]),
         cmd(RenameWorkspace, "rename-workspace", "Rename workspace", &["ws"], vec![Input::pick("workspace", "Workspace", InputKind::Workspace), Input::text("label", "New label")]),
         cmd(RenameTab, "rename-tab", "Rename tab", &["tab"], vec![Input::pick("tab", "Tab", InputKind::Tab), Input::text("label", "New label")]),

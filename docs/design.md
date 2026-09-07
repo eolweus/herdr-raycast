@@ -101,7 +101,7 @@ confirm = false
 [[commands.inputs]]
 name = "branch"
 prompt = "Branch name"
-kind = "text"                # text | choice | workspace | tab | pane | agent
+kind = "text"                # text | choice | workspace | tab | pane | agent | ref (git refs: origin default branch first, then local branches; typed refs accepted)
 # choices = ["a", "b"]       # for kind = choice
 # choices_command = "git branch --format=%(refname:short)"
 

@@ -41,6 +41,7 @@ pub enum InputKind {
     Tab,
     Pane,
     Agent,
+    Ref,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
