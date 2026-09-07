@@ -30,9 +30,48 @@ pub fn base_refs(dir: &Path) -> Vec<String> {
     out
 }
 
+/// A branch name git accepts: lowercase, `/` kept for grouping, everything else
+/// git rejects (spaces, `..`, `~^:?*[\\`, `@{`, leading `-`, `.lock`) turned into `-`.
+pub fn branch_slug(raw: &str) -> String {
+    let mut out = String::new();
+    for c in raw.trim().chars().map(|c| c.to_ascii_lowercase()) {
+        let keep = c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '/');
+        if keep {
+            if (c == '.' && out.ends_with('.')) || (c == '/' && out.ends_with('/')) {
+                continue;
+            }
+            out.push(c);
+        } else if !out.ends_with('-') && !out.is_empty() {
+            out.push('-');
+        }
+    }
+    let mut out = out.replace("@{", "-");
+    while out.ends_with(".lock") {
+        out.truncate(out.len() - 5);
+    }
+    out.split('/')
+        .map(|seg| seg.trim_matches(|c| c == '-' || c == '.'))
+        .filter(|seg| !seg.is_empty())
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn branch_slugs_pass_git_check() {
+        assert_eq!(branch_slug("Fix 502 Errors!"), "fix-502-errors");
+        assert_eq!(branch_slug("feature/ATL-12: thing"), "feature/atl-12-thing");
+        assert_eq!(branch_slug("-bad..name.lock"), "bad.name");
+        assert_eq!(branch_slug("  "), "");
+        for raw in ["Fix 502 Errors!", "feature/ATL-12: thing", "-bad..name.lock", "a//b", "x@{1}"] {
+            let b = branch_slug(raw);
+            let ok = Command::new("git").args(["check-ref-format", "--branch", &b]).output().unwrap().status.success();
+            assert!(ok, "{raw:?} -> {b:?}");
+        }
+    }
 
     #[test]
     fn default_base_prefers_remote_and_locals_follow() {

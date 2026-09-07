@@ -72,7 +72,7 @@ Opens in Insert. Escape enters Normal. Escape in Normal does nothing.
 
 Keys resolve by the Item kind under the cursor, so they work in All. The keymap is one table in code; no config layer in v1.
 
-Primary actions: Workspace, Tab, Pane, Agent focus the target and close the Palette. Command prompts for inputs inside the Palette (text inputs reuse the search bar, picker inputs reuse the list), then runs and closes unless `keep_open`. The rename builtins keep the Palette open and report the result in the status line; typed agent names are sanitized to Herdr's rule (`[a-z][a-z0-9_-]*`, 32 chars) before the call.
+Primary actions: Workspace, Tab, Pane, Agent focus the target and close the Palette. Command prompts for inputs inside the Palette (text inputs reuse the search bar, picker inputs reuse the list), then runs and closes unless `keep_open`. The rename builtins keep the Palette open and report the result in the status line; typed agent names are sanitized to Herdr's rule (`[a-z][a-z0-9_-]*`, 32 chars) before the call, and New worktree branch names to a lowercase name git accepts (`/` kept, other invalid characters become `-`).
 
 Preview: off by default, toggled with `p`, remembered in `HERDR_PLUGIN_STATE_DIR`. Agents: status, name, workspace, cwd, title, last 40 lines of recent output, refreshed for the selected row only. Commands: resolved `run`, Target, inputs, source file. Workspaces: tab list. Tabs: panes.
 
