@@ -166,7 +166,13 @@ impl Client {
         self.call("pane.close", json!({"pane_id": id})).map(|_| ())
     }
     pub fn start_agent(&self, name: &str, kind: &str, pane_id: &str) -> Result<()> {
-        self.call("agent.start", json!({"name": name, "kind": kind, "pane_id": pane_id})).map(|_| ())
+        self.start_agent_args(name, kind, pane_id, &[])
+    }
+    pub fn start_agent_args(&self, name: &str, kind: &str, pane_id: &str, args: &[String]) -> Result<()> {
+        self.call("agent.start", json!({"name": name, "kind": kind, "pane_id": pane_id, "args": args})).map(|_| ())
+    }
+    pub fn prompt_agent(&self, target: &str, text: &str) -> Result<()> {
+        self.call("agent.prompt", json!({"target": target, "text": text})).map(|_| ())
     }
     pub fn notify(&self, title: &str, body: Option<&str>) {
         let _ = self.call("notification.show", json!({"title": title, "body": body}));
@@ -332,6 +338,21 @@ pub struct Agent {
     pub focused: bool,
     #[serde(default)]
     pub state_labels: std::collections::HashMap<String, String>,
+    #[serde(default)]
+    pub agent_session: Option<AgentSession>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+#[allow(dead_code)]
+pub struct AgentSession {
+    #[serde(default)]
+    pub agent: Option<String>,
+    #[serde(default)]
+    pub kind: Option<String>,
+    #[serde(default)]
+    pub source: Option<String>,
+    #[serde(default)]
+    pub value: Option<String>,
 }
 
 impl Agent {
