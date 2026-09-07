@@ -30,18 +30,13 @@ pub fn draw(f: &mut Frame, app: &App) {
     draw_footer(f, app, rows[3]);
 }
 
-// DarkGray is near-invisible on dark themes; the dim attribute fades the real foreground instead.
-fn faded() -> Style {
-    Style::default().add_modifier(Modifier::DIM)
-}
-
 fn status_style(s: AgentStatus) -> Style {
     match s {
         AgentStatus::Blocked => Style::default().fg(Color::Red).bold(),
         AgentStatus::Done => Style::default().fg(Color::Cyan).bold(),
         AgentStatus::Working => Style::default().fg(Color::Yellow),
         AgentStatus::Idle => Style::default().fg(Color::Green),
-        AgentStatus::Unknown => faded(),
+        AgentStatus::Unknown => Style::default().fg(Color::DarkGray),
     }
 }
 
@@ -52,7 +47,7 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
         let style = if *v == app.view {
             Style::default().add_modifier(Modifier::REVERSED | Modifier::BOLD)
         } else {
-            faded()
+            Style::default().fg(Color::DarkGray)
         };
         spans.push(Span::styled(label, style));
         spans.push(Span::raw(" "));
@@ -81,8 +76,7 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
 fn tone_style(t: Tone) -> Style {
     match t {
         Tone::Plain => Style::default(),
-        Tone::Dim => faded(),
-        Tone::Rule => Style::default().fg(Color::DarkGray),
+        Tone::Dim | Tone::Rule => Style::default().fg(Color::DarkGray),
         Tone::Title => Style::default().bold(),
         Tone::Heading => Style::default().fg(Color::Blue).bold(),
         Tone::Strong => Style::default().bold(),
@@ -190,7 +184,7 @@ fn rows(app: &App) -> (Vec<Row>, Vec<Display>, usize) {
                 .map(|(n, &i)| {
                     let it = &app.items[i];
                     let glyph = match it.kind {
-                        Kind::Command(_) => Some(("›".to_string(), faded())),
+                        Kind::Command(_) => Some(("›".to_string(), Style::default().fg(Color::DarkGray))),
                         Kind::Workspace if app.view != View::Workspaces => Some(("▪".to_string(), Style::default().fg(Color::Blue))),
                         _ => it.status.map(|s| (s.glyph().to_string(), status_style(s))),
                     };
@@ -283,9 +277,9 @@ fn meta_spans(meta: &[Seg], max: usize, dim: bool) -> (Vec<Span<'static>>, usize
     let mut spans = vec![];
     for (n, (text, tone)) in parts.iter().enumerate() {
         if n > 0 {
-            spans.push(Span::styled(" · ", faded()));
+            spans.push(Span::styled(" · ", Style::default().fg(Color::DarkGray)));
         }
-        let style = if dim { faded() } else { tone_style(*tone) };
+        let style = if dim { Style::default().fg(Color::DarkGray) } else { tone_style(*tone) };
         spans.push(Span::styled(text.clone(), style));
     }
     let w = total(&parts);
@@ -313,7 +307,7 @@ fn draw_list(f: &mut Frame, app: &App, area: Rect) {
             Display::Header(name) => {
                 let label = format!(" {name} ");
                 let rule = "─".repeat(width.saturating_sub(label.width() + 1));
-                lines.push(Line::from(vec![Span::styled(label, faded().bold()), Span::styled(rule, Style::default().fg(Color::DarkGray))]));
+                lines.push(Line::from(vec![Span::styled(label, Style::default().fg(Color::DarkGray).bold()), Span::styled(rule, Style::default().fg(Color::DarkGray))]));
                 continue;
             }
             Display::Row(i) => *i,
@@ -334,7 +328,7 @@ fn draw_list(f: &mut Frame, app: &App, area: Rect) {
             spans.push(Span::raw(indent));
         }
         if let Some((g, st)) = &row.glyph {
-            spans.push(Span::styled(format!("{g} "), if row.dim { faded() } else { *st }));
+            spans.push(Span::styled(format!("{g} "), if row.dim { Style::default().fg(Color::DarkGray) } else { *st }));
             used += g.width() + 1;
         } else {
             spans.push(Span::raw("  "));
@@ -345,7 +339,7 @@ fn draw_list(f: &mut Frame, app: &App, area: Rect) {
         let title = truncate(&row.title, avail_title);
         let tw = title.width();
         let title_style = if row.dim {
-            faded()
+            Style::default().fg(Color::DarkGray)
         } else if row.workspace && tree {
             Style::default().fg(Color::Blue).bold()
         } else if selected || row.current {
@@ -368,7 +362,7 @@ fn draw_list(f: &mut Frame, app: &App, area: Rect) {
         lines.push(line);
     }
     if rows.is_empty() {
-        lines.push(Line::from(Span::styled("  nothing matches", faded())));
+        lines.push(Line::from(Span::styled("  nothing matches", Style::default().fg(Color::DarkGray))));
     }
     f.render_widget(Paragraph::new(lines), area);
 }
@@ -385,7 +379,7 @@ fn draw_preview(f: &mut Frame, app: &App, area: Rect) {
         let keep_head = 5.min(h.saturating_sub(2));
         let tail = h.saturating_sub(keep_head + 1);
         let mut v: Vec<Line> = lines.iter().take(keep_head).map(to_line).collect();
-        v.push(Line::from(Span::styled("…", faded())));
+        v.push(Line::from(Span::styled("…", Style::default().fg(Color::DarkGray))));
         v.extend(lines.iter().skip(lines.len() - tail).map(to_line));
         v
     } else {
@@ -409,7 +403,7 @@ fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
     let style = if app.status.as_deref().is_some_and(|s| s.starts_with("error")) {
         Style::default().fg(Color::Red)
     } else {
-        faded()
+        Style::default().fg(Color::DarkGray)
     };
     f.render_widget(Paragraph::new(Line::from(Span::styled(format!(" {text}"), style))), area);
 }
