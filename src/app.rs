@@ -95,6 +95,12 @@ impl Kind {
     }
 }
 
+// Herdr's generated tab labels ("1 · dir › agent › title") fuzzy-match almost any query.
+fn manual_tab_label(t: &crate::herdr::Tab) -> Option<String> {
+    let auto = t.label.split_once(" · ").is_some_and(|(n, _)| n.parse::<u32>().is_ok());
+    (!auto && !t.label.is_empty()).then(|| t.label.clone())
+}
+
 fn seg(text: impl Into<String>, tone: Tone) -> Seg {
     Seg(text.into(), tone)
 }
@@ -244,7 +250,13 @@ impl App {
         if self.query.trim().is_empty() {
             self.filtered = ranked;
         } else if self.view == View::Workspaces {
-            // Keep tree order; ancestors of a match stay as dimmed context.
+            // Workspaces order by their best match; inside one the tree order holds and
+            // ancestors of a match stay as dimmed context.
+            let mut best = vec![usize::MAX; self.items.len()];
+            for (pos, &i) in ranked.iter().enumerate() {
+                let root = (0..=i).rev().find(|&j| self.items[j].depth == 0).unwrap_or(0);
+                best[root] = best[root].min(pos);
+            }
             let matched: std::collections::HashSet<usize> = ranked.into_iter().collect();
             let mut keep = vec![false; self.items.len()];
             for &i in &matched {
@@ -260,7 +272,15 @@ impl App {
                     }
                 }
             }
-            self.filtered = (0..self.items.len()).filter(|&i| keep[i]).collect();
+            let mut groups: Vec<Vec<usize>> = vec![];
+            for i in (0..self.items.len()).filter(|&i| keep[i]) {
+                if self.items[i].depth == 0 || groups.is_empty() {
+                    groups.push(vec![]);
+                }
+                groups.last_mut().unwrap().push(i);
+            }
+            groups.sort_by_key(|g| best[g[0]]);
+            self.filtered = groups.concat();
             self.context = self.filtered.iter().map(|i| !matched.contains(i)).collect();
             if self.cursor == 0 {
                 if let Some(p) = self.context.iter().position(|c| !c) {
@@ -373,7 +393,7 @@ impl App {
                         status: None,
                         depth: 1,
                         current: false,
-                        hay: vec![t.label.clone(), w.label.clone()],
+                        hay: manual_tab_label(t).into_iter().chain([w.label.clone()]).collect(),
                         item_ref: Some(ItemRef::Tab { tab_id: t.tab_id.clone(), workspace_id: w.workspace_id.clone() }),
                     });
                 }
@@ -405,7 +425,7 @@ impl App {
                         status: agent.map(|_| p.agent_status),
                         depth: if show_tabs { 2 } else { 1 },
                         current: self.ctx.pane_id.as_deref() == Some(p.pane_id.as_str()),
-                        hay: vec![name, t.label.clone(), w.label.clone(), cwd.rsplit('/').next().unwrap_or("").to_string()],
+                        hay: [name].into_iter().chain(manual_tab_label(t)).chain([w.label.clone(), cwd.rsplit('/').next().unwrap_or("").to_string()]).collect(),
                         item_ref: Some(ItemRef::Pane { pane_id: p.pane_id.clone(), tab_id: t.tab_id.clone(), workspace_id: w.workspace_id.clone(), has_agent: agent.is_some() }),
                     });
                 }
