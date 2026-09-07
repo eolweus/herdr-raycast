@@ -129,6 +129,8 @@ pub enum Flow {
     Confirm { draft: Draft },
 }
 
+const TOP_MATCHES: usize = 3;
+
 pub struct App {
     pub client: Client,
     pub cfg: Config,
@@ -143,6 +145,7 @@ pub struct App {
     pub items: Vec<Item>,
     pub filtered: Vec<usize>,
     pub context: Vec<bool>,
+    pub top: usize,
     pub cursor: usize,
     pub preview: bool,
     pub preview_cache: Option<(String, String, Instant)>,
@@ -180,6 +183,7 @@ impl App {
             items: vec![],
             filtered: vec![],
             context: vec![],
+            top: 0,
             cursor: 0,
             preview: st.preview,
             preview_cache: None,
@@ -236,6 +240,7 @@ impl App {
         let hays: Vec<&[String]> = self.items.iter().map(|i| i.hay.as_slice()).collect();
         let ranked = self.search.rank(&self.query, hays.into_iter());
         self.context.clear();
+        self.top = 0;
         if self.query.trim().is_empty() {
             self.filtered = ranked;
         } else if self.view == View::Workspaces {
@@ -263,8 +268,10 @@ impl App {
                 }
             }
         } else if self.view == View::All {
+            // Best matches lead regardless of section; the rest stay grouped.
             let mut v = ranked;
-            v.sort_by_key(|&i| self.items[i].kind.section().0);
+            self.top = v.len().min(TOP_MATCHES);
+            v[self.top..].sort_by_key(|&i| self.items[i].kind.section().0);
             self.filtered = v;
         } else {
             self.filtered = ranked;

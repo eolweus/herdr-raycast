@@ -201,7 +201,7 @@ fn rows(app: &App) -> (Vec<Row>, Vec<Display>, usize) {
             View::All => {
                 let mut last = usize::MAX;
                 for (n, &i) in app.filtered.iter().enumerate() {
-                    let (sec, name) = app.items[i].kind.section();
+                    let (sec, name) = if n < app.top { (usize::MAX - 1, "Top") } else { app.items[i].kind.section() };
                     if sec != last {
                         if last != usize::MAX {
                             display.push(Display::Spacer);
