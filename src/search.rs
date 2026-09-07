@@ -40,7 +40,7 @@ mod tests {
 
     #[test]
     fn ranks_and_filters() {
-        let items = vec![vec!["New worktree".to_string()], vec!["Rename tab".to_string()], vec!["tile cache".to_string(), "w5".to_string()]];
+        let items = [vec!["New worktree".to_string()], vec!["Rename tab".to_string()], vec!["tile cache".to_string(), "w5".to_string()]];
         let mut s = Search::default();
         let r = s.rank("wt", items.iter().map(|v| v.as_slice()));
         assert_eq!(r, vec![0]);

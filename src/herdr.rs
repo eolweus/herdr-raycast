@@ -136,7 +136,7 @@ impl Client {
 
     pub fn create_workspace(&self, cwd: &str, label: Option<&str>, focus: bool, env: &Env) -> Result<Created> {
         let v = self.call("workspace.create", json!({"cwd": cwd, "label": label, "focus": focus, "env": env}))?;
-        Ok(created_from(&v)?)
+        created_from(&v)
     }
 
     pub fn create_worktree(&self, cwd: &str, branch: &str, base: Option<&str>, label: Option<&str>) -> Result<Created> {
@@ -144,7 +144,7 @@ impl Client {
             "worktree.create",
             json!({"cwd": cwd, "branch": branch, "base": base, "label": label, "focus": true}),
         )?;
-        Ok(created_from(&v)?)
+        created_from(&v)
     }
 
     pub fn rename_workspace(&self, id: &str, label: &str) -> Result<()> {

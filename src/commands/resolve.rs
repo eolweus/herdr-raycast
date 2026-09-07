@@ -57,7 +57,7 @@ pub fn merge(mut all: Vec<Command>) -> Vec<Command> {
         by_id.insert(c.id.clone(), c);
     }
     let mut out: Vec<Command> = order.into_iter().filter_map(|id| by_id.remove(&id)).collect();
-    out.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
+    out.sort_by_key(|a| a.title.to_lowercase());
     out
 }
 
