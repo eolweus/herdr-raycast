@@ -6,7 +6,7 @@ Working name herdr-raycast, manifest id `erling.command-palette`, display name "
 
 - Rust, ratatui, nucleo for fuzzy matching, crossterm for input.
 - Direct Herdr socket client (ADR-0001). One connection per request. CLI kept only for scripts.
-- Manifest `herdr-plugin.toml` with two `[[panes]]` entries (`palette` and `runner`, placement `popup`, which is the sized session-modal floating pane; `overlay` cannot be sized and returns a pane id, `popup` returns none and is tracked by a marker file) and actions `open` (All), `open-agents`, `open-workspaces`, `open-commands`. The user binds ctrl+space to `open` in their Herdr config; keybindings never live in the manifest.
+- Manifest `herdr-plugin.toml` with two `[[panes]]` entries (`palette` and `runner`, placement `popup`, which is the sized session-modal floating pane; `overlay` cannot be sized and returns a pane id, `popup` returns none and is tracked by a marker file) and actions `open` (All), `open-agents`, `open-workspaces`, `open-commands`. The user binds a key to `open` in their Herdr config (cmd+ø here, since ctrl+space is the WezTerm leader); keybindings never live in the manifest.
 - `open` toggles: the UI writes an open marker in the state dir on start and clears it on exit; a second `open` calls `popup.close` when the marker exists.
 - Reference material on this machine: `~/projects/herdr-reviewr/docs/herdr-api-notes.md`, `~/.config/herdr/plugins/github/herdr.auto-title-*/docs/architecture/herdr-socket-api.md` (verified against 0.8.2, protocol 20), `herdr api schema --json`.
 

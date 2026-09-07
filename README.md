@@ -14,7 +14,7 @@ Bind a key in `~/.config/herdr/config.toml`:
 
 ```toml
 [[keys.command]]
-key = "ctrl+space"
+key = "cmd+shift+p"
 type = "plugin_action"
 command = "erling.command-palette.open"
 ```
