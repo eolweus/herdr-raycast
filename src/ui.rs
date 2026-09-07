@@ -179,6 +179,7 @@ fn rows(app: &App) -> (Vec<Row>, Vec<Display>, usize) {
                     let it = &app.items[i];
                     let glyph = match it.kind {
                         Kind::Command(_) => Some(("›".to_string(), Style::default().fg(Color::DarkGray))),
+                        Kind::Workspace if app.view != View::Workspaces => Some(("▪".to_string(), Style::default().fg(Color::Blue))),
                         _ => it.status.map(|s| (s.glyph().to_string(), status_style(s))),
                     };
                     Row {

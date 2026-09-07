@@ -40,7 +40,7 @@ Header shows the View tabs with their numbers and the Context Directory. Preview
 - **Workspaces**: the Herdr navigator tree. `▾` on workspace rows, `├──`/`└──` with `│` spines under children, a blank line between workspaces, `◆` on the captured workspace and pane. Tab rows appear only when a workspace has more than one tab. Pane rows are labeled by manual label, agent name, terminal title, agent kind, else "shell". A query keeps tree order and shows ancestors of matches dimmed.
 - **Commands**: all three classes, with class and source shown.
 
-Status glyphs appear only on agents and on panes running an agent; workspace and tab rows carry an activity summary ("1 blocked · 2 working") in their meta instead. Meta is a list of colored segments: paths cyan, agent kind magenta, workspace blue, status in its status color, the rest dim. Paths show their last two components. The header shows the captured workspace and Context Directory in the same colors, bold.
+Status glyphs appear only on agents and on panes running an agent; workspace rows get a blue ▪ outside the tree (the tree caret already marks them there); workspace and tab rows carry an activity summary ("1 blocked · 2 working") in their meta instead. Meta is a list of colored segments: paths cyan, agent kind magenta, workspace blue, status in its status color, the rest dim. Paths show their last two components. The header shows the captured workspace and Context Directory in the same colors, bold.
 
 Fuzzy match fields: workspace label and directory name; tab label plus workspace label; pane agent name or process plus tab and workspace; agent name, title, workspace; Command title, id, keywords, plugin id.
 
