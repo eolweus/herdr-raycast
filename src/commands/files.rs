@@ -19,6 +19,8 @@ pub struct CommandDef {
     #[serde(default)]
     pub title: Option<String>,
     #[serde(default)]
+    pub description: String,
+    #[serde(default)]
     pub keywords: Vec<String>,
     #[serde(default)]
     pub run: Option<String>,
@@ -76,6 +78,7 @@ fn to_command(def: CommandDef, path: &Path, depth: i32) -> Command {
     Command {
         title: def.title.unwrap_or_else(|| def.id.clone()),
         id: def.id,
+        description: def.description,
         keywords: def.keywords,
         class: Class::User { file: path.to_path_buf() },
         run: def.run.unwrap_or_default(),

@@ -53,6 +53,7 @@ scope = "~/work/infra"
 [[commands]]
 id = "tf-plan"
 title = "Terraform plan"
+description = "Plan the stack in this directory"   # optional, shown in the preview
 run = "terraform plan"
 in = "split"              # background | current-pane | split | tab | workspace | popup
 

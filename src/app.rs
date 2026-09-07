@@ -113,6 +113,22 @@ fn manual_tab_label(t: &crate::herdr::Tab) -> Option<String> {
     (!auto && !t.label.is_empty()).then(|| t.label.clone())
 }
 
+fn wrap(text: &str, width: usize) -> Vec<String> {
+    let mut lines = vec![String::new()];
+    for word in text.split_whitespace() {
+        let cur = lines.last_mut().unwrap();
+        if !cur.is_empty() && cur.chars().count() + 1 + word.chars().count() > width {
+            lines.push(word.to_string());
+        } else {
+            if !cur.is_empty() {
+                cur.push(' ');
+            }
+            cur.push_str(word);
+        }
+    }
+    lines
+}
+
 fn seg(text: impl Into<String>, tone: Tone) -> Seg {
     Seg(text.into(), tone)
 }
@@ -859,7 +875,7 @@ impl App {
     }
 
     /// Lines for the preview panel of the selected Item.
-    pub fn preview_lines(&self) -> Vec<String> {
+    pub fn preview_lines(&self, width: usize) -> Vec<String> {
         let Some(item) = self.selected() else { return vec![] };
         let s = &self.snapshot;
         match (&item.kind, &item.item_ref) {
@@ -913,7 +929,12 @@ impl App {
             }
             (Kind::Command(i), _) => {
                 let c = &self.commands[*i];
-                let mut lines = vec![c.title.clone(), format!("id: {}", c.id), format!("class: {}", c.class.label()), format!("source: {}", c.source)];
+                let mut lines = vec![c.title.clone()];
+                if !c.description.is_empty() {
+                    lines.extend(wrap(&c.description, width.max(20)));
+                }
+                lines.push(String::new());
+                lines.extend([format!("id: {}", c.id), format!("class: {}", c.class.label()), format!("source: {}", c.source)]);
                 match &c.class {
                     Class::User { .. } => {
                         lines.push(format!("in: {}", c.target.label()));

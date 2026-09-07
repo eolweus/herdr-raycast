@@ -90,6 +90,8 @@ pub struct Command {
     pub id: String,
     pub title: String,
     #[serde(default)]
+    pub description: String,
+    #[serde(default)]
     pub keywords: Vec<String>,
     pub class: Class,
     #[serde(default)]
@@ -121,6 +123,9 @@ impl Command {
         v.extend(self.keywords.iter().cloned());
         if let Class::PluginAction { plugin_id, .. } = &self.class {
             v.push(plugin_id.clone());
+        }
+        if !self.description.is_empty() {
+            v.push(self.description.clone());
         }
         v
     }

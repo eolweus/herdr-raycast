@@ -4,6 +4,7 @@
 [[commands]]
 id = "lazygit"
 title = "Lazygit here"
+description = "Open lazygit for the current directory in a popup."
 keywords = ["git"]
 run = "lazygit"
 in = "popup"
@@ -11,6 +12,7 @@ in = "popup"
 [[commands]]
 id = "shell-tab"
 title = "New shell tab here"
+description = "Open a plain shell tab at the current directory with the label you type."
 run = ""
 in = "tab"
 label = "{{input.label}}"
@@ -23,6 +25,7 @@ kind = "text"
 [[commands]]
 id = "run-in-split"
 title = "Run command in split"
+description = "Run any shell command in a new split beside the current pane."
 run = "{{input.cmd}}"
 in = "split"
 
@@ -34,6 +37,7 @@ kind = "text"
 [[commands]]
 id = "checkout-branch"
 title = "Checkout branch"
+description = "Switch the current checkout to a local branch picked from git."
 keywords = ["git", "switch"]
 run = "git switch {{input.branch}}"
 in = "current-pane"

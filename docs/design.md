@@ -94,6 +94,7 @@ scope = "/home/erling/atlas/atlas-workspace/worktrees/main/infra/terraform"  # o
 [[commands]]
 id = "new-worktree"
 title = "New worktree"
+description = "Shown in the preview; also searched"  # optional
 keywords = ["wt", "branch"]
 run = "herdr worktree create --branch {{input.branch}} --base main --focus"
 in = "background"            # background | current-pane | split | tab | workspace | popup

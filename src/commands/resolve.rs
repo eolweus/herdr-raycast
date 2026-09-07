@@ -25,7 +25,8 @@ fn plugin_commands(actions: &[PluginAction], own: &str) -> Vec<Command> {
         .map(|a| Command {
             id: format!("{}.{}", a.plugin_id, a.action_id),
             title: a.title.clone(),
-            keywords: a.description.iter().cloned().collect(),
+            description: a.description.clone().unwrap_or_default(),
+            keywords: vec![],
             class: Class::PluginAction { plugin_id: a.plugin_id.clone(), action_id: a.action_id.clone() },
             run: String::new(),
             target: Default::default(),
@@ -70,6 +71,7 @@ mod tests {
         Command {
             id: id.into(),
             title: title.into(),
+            description: String::new(),
             keywords: vec![],
             class: Class::User { file: "x.toml".into() },
             run: String::new(),

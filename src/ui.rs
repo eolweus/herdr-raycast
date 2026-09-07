@@ -362,9 +362,9 @@ fn draw_list(f: &mut Frame, app: &App, area: Rect) {
 }
 
 fn draw_preview(f: &mut Frame, app: &App, area: Rect) {
-    let lines = app.preview_lines();
     let block = Block::default().borders(Borders::LEFT).border_style(Style::default().fg(Color::DarkGray));
     let inner = block.inner(area);
+    let lines = app.preview_lines(inner.width as usize);
     f.render_widget(block, area);
     let h = inner.height as usize;
     let skip = lines.len().saturating_sub(h).min(if lines.len() > h { lines.len() - h } else { 0 });

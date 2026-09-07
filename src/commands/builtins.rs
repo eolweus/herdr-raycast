@@ -26,6 +26,7 @@ fn cmd(b: Builtin, id: &str, title: &str, keywords: &[&str], inputs: Vec<Input>)
     Command {
         id: id.into(),
         title: title.into(),
+        description: describe(b).into(),
         keywords: keywords.iter().map(|s| s.to_string()).collect(),
         class: Class::Builtin(b),
         run: String::new(),
@@ -38,6 +39,26 @@ fn cmd(b: Builtin, id: &str, title: &str, keywords: &[&str], inputs: Vec<Input>)
         disabled: false,
         depth: -2,
         source: "built-in".into(),
+    }
+}
+
+fn describe(b: Builtin) -> &'static str {
+    use Builtin::*;
+    match b {
+        NewWorkspace => "Open a new workspace at the current directory; the label defaults to the directory name.",
+        NewWorktree => "Create a git worktree and branch off the chosen base ref (origin's main by default) and open it as a workspace.",
+        NewTab => "Open a shell tab in this workspace at the current directory.",
+        RenameWorkspace => "Give the workspace a new label.",
+        RenameTab => "Give the tab a new label; Herdr's generated label is replaced.",
+        RenameAgent => "Give the agent a new Herdr name; it is lowercased and slugified for you.",
+        Yeet => "Fork this Claude conversation into a new tab that runs /yeet-task with your instruction, then closes itself. A leftover yeet tab needs your attention.",
+        CloseWorkspace => "Close the workspace and everything in it, after confirmation.",
+        CloseTab => "Close the tab and its panes, after confirmation.",
+        ClosePane => "Close the pane, after confirmation.",
+        StartAgent => "Start the configured agent kind in a new split, tab or free pane, with an optional name.",
+        EditCommandFiles => "Open one of your command files in the editor.",
+        NewCommandFile => "Create a command file scoped to the current directory and open it.",
+        FocusWorkspace | FocusTab | FocusPane | FocusAgent => "Bring it into view and close the palette.",
     }
 }
 

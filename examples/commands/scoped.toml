@@ -5,6 +5,7 @@ scope = "/home/erling/atlas/atlas-workspace/worktrees/main/infra"
 [[commands]]
 id = "tf-plan"
 title = "Terraform plan"
+description = "Plan the stack in this directory; only offered inside infra/."
 keywords = ["terraform"]
 run = "terraform plan"
 in = "split"
