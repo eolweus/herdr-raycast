@@ -8,5 +8,5 @@ Herdr 0.8.2 replays a backlog of roughly the last 95 revisions of every pane on 
 
 ## Consequences
 
-- Do not reintroduce a subscription without measuring the backlog again on the installed Herdr version.
+- Do not reintroduce a subscription without measuring the backlog again on the installed Herdr version. The 0.9.0 release notes say new subscriptions start with live events instead of replaying history, so the premise may no longer hold; polling stays until someone measures it and finds a reason to switch.
 - Preview content that needs a per-pane read (recent output) is fetched only for the selected Item, not for every row.
