@@ -3,7 +3,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 pub type Env = std::collections::HashMap<String, String>;
@@ -11,6 +11,7 @@ pub type Env = std::collections::HashMap<String, String>;
 #[derive(Clone, Debug)]
 pub struct Client {
     path: PathBuf,
+    timeout: Duration,
 }
 
 impl Client {
@@ -21,14 +22,23 @@ impl Client {
                 let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
                 home.join(".config/herdr/herdr.sock")
             });
-        Self { path }
+        Self { path, timeout: Duration::from_secs(5) }
+    }
+
+    /// A forwarded socket of another Machine; a broken ssh forward must not stall the UI for long.
+    pub fn at(path: PathBuf) -> Self {
+        Self { path, timeout: Duration::from_millis(1500) }
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
     }
 
     pub fn call(&self, method: &str, params: Value) -> Result<Value> {
         let mut stream = UnixStream::connect(&self.path)
             .with_context(|| format!("connect {}", self.path.display()))?;
-        stream.set_read_timeout(Some(Duration::from_secs(5)))?;
-        stream.set_write_timeout(Some(Duration::from_secs(5)))?;
+        stream.set_read_timeout(Some(self.timeout))?;
+        stream.set_write_timeout(Some(self.timeout))?;
         let req = json!({"id": "herdr-raycast", "method": method, "params": params});
         stream.write_all(serde_json::to_string(&req)?.as_bytes())?;
         stream.write_all(b"\n")?;

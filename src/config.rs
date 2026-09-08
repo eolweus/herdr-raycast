@@ -11,6 +11,8 @@ pub struct Config {
     pub preview_lines: u32,
     pub agent_kind: String,
     pub debug_keys: bool,
+    pub machines_dir: String,
+    pub remote_poll_ms: u64,
 }
 
 impl Default for Config {
@@ -23,7 +25,15 @@ impl Default for Config {
             preview_lines: 40,
             agent_kind: "claude".into(),
             debug_keys: false,
+            machines_dir: "~/.herdr/machines".into(),
+            remote_poll_ms: 2000,
         }
+    }
+}
+
+impl Config {
+    pub fn machines_dir(&self) -> PathBuf {
+        PathBuf::from(crate::commands::files::expand_home(&self.machines_dir))
     }
 }
 
