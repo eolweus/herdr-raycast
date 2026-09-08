@@ -12,7 +12,8 @@ Working name herdr-raycast, manifest id `erling.command-palette`, display name "
 
 ## Host facts that shape the design
 
-- Herdr 0.8.2 on this host (munin, hostname `erling-test`). This is the primary install; the laptop links a clone later. Remote key delivery needs `--remote-keybindings server` on the client.
+- Herdr 0.9.0 on both machines (munin, hostname `erling-test`, and the laptop). Each Machine runs its own server with its own ids; the plugin is linked on each from `~/herdr-plugins/herdr-raycast` (kept in step by `herdr-plugins sync` in dotfiles). In multi-machine mode the client applies its local keybindings and does not send local custom-command bindings to a remote server, so a palette key only works while viewing a Machine that has the plugin linked and the same `[[keys.command]]` entries.
+- A popup is a per-server session resource: a Palette hosted on one Machine is visible only while the client views that Machine. There is no socket method to switch the client's selected machine. Both facts drive the Machines section below.
 - Agent Status enum: `idle | working | blocked | done | unknown`. `done` = finished while unseen. No last-message API; `terminal_title_stripped` is the free signal, `agent.read --source recent-unwrapped` the paid one.
 - `session.snapshot` returns the whole tree; events are not subscribed (ADR-0002).
 - When the Palette is open it is the focused pane. Every action uses the Captured Context from `HERDR_PLUGIN_CONTEXT_JSON` at open, and `plugin.action.invoke` is called with that context explicitly.
@@ -75,6 +76,16 @@ Keys resolve by the Item kind under the cursor, so they work in All. The keymap 
 Primary actions: Workspace, Tab, Pane, Agent focus the target and close the Palette. Command prompts for inputs inside the Palette (text inputs reuse the search bar, picker inputs reuse the list), then runs and closes unless `keep_open`. The rename builtins keep the Palette open and report the result in the status line; typed agent names are sanitized to Herdr's rule (`[a-z][a-z0-9_-]*`, 32 chars) before the call, and New worktree branch names to a lowercase name git accepts (`/` kept, other invalid characters become `-`).
 
 Preview: off by default, toggled with `p`, remembered in `HERDR_PLUGIN_STATE_DIR`. Agents: status, name, workspace, cwd, title, last 40 lines of recent output, refreshed for the selected row only. Commands: resolved `run`, Target, inputs, source file. Workspaces: tab list. Tabs: panes.
+
+## Machines
+
+One Palette per Machine, each seeing all of them (ADR-0004). Every `<name>.sock` in `~/.herdr/machines/` (config `machines_dir`) is another Machine's Herdr socket, put there by an ssh forward; the entry that resolves to the local socket is skipped. Each Machine is polled from its own thread every `remote_poll_ms` (2 s) with a 1.5 s socket timeout, so a stalled forward never blocks the UI; a Machine that fails to answer drops its Items until it answers again, and stays in the header crossed out. The directory is rescanned every 5 s, so forwards can come and go while the Palette is open.
+
+Items from another Machine appear in All, Agents and Workspaces with the Machine name as their first meta segment and as a search field (typing the name narrows to that Machine). Their ids are suffixed `@<name>`, usage keys included. They are never `current`. Pickers inside Commands (`kind = workspace|tab|pane|agent`) stay local.
+
+Actions on such an Item run against that Machine's socket: rename, close, start agent, and Command Files with `on` (whose `in = current-pane|split|tab|workspace` targets land on that Machine, with the Item's directory as the default cwd; `background` runs the script here). Scripts learn `item.machine` and `item.socket` (`RAYCAST_ITEM_MACHINE`, `RAYCAST_ITEM_SOCKET`) so they can call `herdr` against the right server. Focus is best effort: the target is focused on its own server, the Palette stays open and says "switch machine in Herdr to see it", because nothing can switch the client.
+
+The dotfiles side: the Mac's `Host munin` ssh entry carries `RemoteForward ~/.herdr/machines/mac.sock` (munin sees the Mac) and `LocalForward ~/.herdr/machines/munin.sock` (the Mac sees munin), with `StreamLocalBindUnlink yes` on both ends so stale socket files do not block a reconnect.
 
 ## Commands
 

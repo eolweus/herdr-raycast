@@ -19,7 +19,20 @@ type = "plugin_action"
 command = "erling.command-palette.open"
 ```
 
-Actions `open-agents`, `open-workspaces` and `open-commands` open straight into a View. Over `--remote`, custom keys need `--remote-keybindings server` on the client and `herdr server reload-config` on the server.
+Actions `open-agents`, `open-workspaces` and `open-commands` open straight into a View. With several machines in Herdr 0.9, link the plugin and bind the keys on every machine: the client applies its own keybindings, and a palette key only works while viewing a machine that has the plugin.
+
+## Machines
+
+Drop another machine's Herdr socket into `~/.herdr/machines/<name>.sock` and its agents, workspaces and panes show up next to the local ones, tagged with `<name>` and searchable by it. An ssh forward is all it takes; both directions for a laptop and a box called munin:
+
+```
+Host munin
+  StreamLocalBindUnlink yes
+  RemoteForward /home/erling/.herdr/machines/mac.sock /Users/me/.config/herdr/herdr.sock
+  LocalForward  /Users/me/.herdr/machines/munin.sock /home/erling/.config/herdr/herdr.sock
+```
+
+munin needs `StreamLocalBindUnlink yes` in its sshd config too. Rename, close, start agent and `on` commands act on the other machine; `in = split|tab|workspace|current-pane` targets land there, `background` runs the script locally with `RAYCAST_ITEM_MACHINE` and `RAYCAST_ITEM_SOCKET` set. Focus can only be done on that machine's own server, so the palette stays open and tells you to switch machine in Herdr. A machine that stops answering is shown crossed out in the header until it is back.
 
 ## Keys
 
@@ -89,6 +102,8 @@ poll_ms = 500
 preview_lines = 40
 debug_keys = false  # append every key event to palette.log in the state dir
 agent_kind = "claude"
+machines_dir = "~/.herdr/machines"   # other machines' forwarded sockets, <name>.sock
+remote_poll_ms = 2000                # how often each of them is polled
 ```
 
 Logs: `~/.local/state/herdr/plugins/erling.command-palette/palette.log` and `commands.log`.

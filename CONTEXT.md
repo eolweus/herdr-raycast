@@ -8,6 +8,10 @@ A Herdr plugin that opens a searchable overlay for jumping to workspaces, tabs, 
 The overlay pane the plugin draws. One Palette is open at a time.
 _Avoid_: popup, picker, launcher
 
+**Machine**:
+One Herdr server. The Palette runs on one Machine (its Items carry no name) and can read others whose sockets are forwarded into its machines directory; their Items carry the Machine's name. Ids are only unique within a Machine.
+_Avoid_: host, remote, server, session
+
 **View**:
 One of the top-level lists the Palette can show: All, Agents, Workspaces, Commands. Selected with the tabs across the top of the Palette.
 _Avoid_: tab (that word is reserved for Herdr tabs), page, filter
