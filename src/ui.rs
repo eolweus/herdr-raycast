@@ -52,6 +52,12 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
         spans.push(Span::styled(label, style));
         spans.push(Span::raw(" "));
     }
+    // Other Machines whose sockets are forwarded here; a failing one stays listed, crossed out.
+    for m in &app.machines.list {
+        let style = if m.ok { tone_style(Tone::Machine) } else { Style::default().fg(Color::DarkGray).crossed_out() };
+        spans.push(Span::styled(format!("⇄ {}", m.name), style));
+        spans.push(Span::raw("  "));
+    }
     let left = Line::from(spans);
     let dir = crate::context::shorten_home(&app.ctx.dir);
     let ws = app.ctx.workspace_label.clone().or_else(|| app.ctx.workspace_id.clone().map(|id| app.snapshot.workspace_label(&id))).unwrap_or_default();
@@ -85,6 +91,7 @@ fn tone_style(t: Tone) -> Style {
         Tone::Path => Style::default().fg(Color::Cyan),
         Tone::Agent => Style::default().fg(Color::Magenta),
         Tone::Workspace => Style::default().fg(Color::Blue),
+        Tone::Machine => Style::default().fg(Color::LightYellow).bold(),
         Tone::Status(s) => status_style(s),
     }
 }
@@ -147,7 +154,7 @@ enum Display {
 
 fn rows(app: &App) -> (Vec<Row>, Vec<Display>, usize) {
     let (rows, cursor): (Vec<Row>, usize) = match &app.flow {
-        Some(Flow::Menu { actions, cursor, query }) => {
+        Some(Flow::Menu { actions, cursor, query, .. }) => {
             let hays: Vec<Vec<String>> = actions.iter().map(|(c, _)| vec![c.title.clone()]).collect();
             let mut s = crate::search::Search::default();
             let idx = s.rank(query, hays.iter().map(|v| v.as_slice()));

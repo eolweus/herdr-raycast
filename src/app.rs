@@ -5,6 +5,7 @@ use crate::config::{self, Config};
 use crate::context::Captured;
 use crate::herdr::{AgentStatus, Client, Snapshot};
 use crate::keys::{self, PaletteKey};
+use crate::machines::Machines;
 use crate::search::Search;
 use crate::state;
 use anyhow::Result;
@@ -67,6 +68,7 @@ pub enum Tone {
     Path,
     Agent,
     Workspace,
+    Machine,
     Status(AgentStatus),
     Title,
     Heading,
@@ -90,17 +92,28 @@ pub struct Item {
     pub current: bool,
     pub hay: Vec<String>,
     pub item_ref: Option<ItemRef>,
+    /// None for the Machine the Palette runs on.
+    pub machine: Option<String>,
 }
 
 impl Item {
     // Names outlive pane and workspace ids across restarts, so usage keys on them.
     pub fn usage_key(&self) -> String {
-        match self.kind {
-            Kind::Command(_) => self.id.clone(),
+        let key = match self.kind {
+            Kind::Command(_) => return self.id.clone(),
             Kind::Workspace => format!("ws:{}", self.hay.first().cloned().unwrap_or_default()),
             Kind::Tab => format!("tab:{}", self.hay.first().cloned().unwrap_or_default()),
             Kind::Pane | Kind::Agent => format!("agent:{}", self.hay.first().cloned().unwrap_or_default()),
-        }
+        };
+        scoped(key, self.machine.as_deref())
+    }
+}
+
+/// Ids are per server, so an Item from another Machine carries its name.
+fn scoped(id: String, machine: Option<&str>) -> String {
+    match machine {
+        Some(m) => format!("{id}@{m}"),
+        None => id,
     }
 }
 
@@ -134,6 +147,10 @@ fn seg(text: impl Into<String>, tone: Tone) -> Seg {
     Seg(text.into(), tone)
 }
 
+fn machine_seg(machine: Option<&str>) -> Vec<Seg> {
+    machine.map(|m| vec![seg(m, Tone::Machine)]).unwrap_or_default()
+}
+
 fn activity(statuses: impl Iterator<Item = AgentStatus>) -> Vec<Seg> {
     let (mut blocked, mut working, mut done) = (0, 0, 0);
     for s in statuses {
@@ -155,11 +172,12 @@ fn activity(statuses: impl Iterator<Item = AgentStatus>) -> Vec<Seg> {
 pub struct Draft {
     pub command: Command,
     pub item: Option<ItemRef>,
+    pub machine: Option<String>,
     pub answers: HashMap<String, String>,
 }
 
 pub enum Flow {
-    Menu { actions: Vec<(Command, Option<ItemRef>)>, cursor: usize, query: String },
+    Menu { actions: Vec<(Command, Option<ItemRef>)>, machine: Option<String>, cursor: usize, query: String },
     Input { draft: Draft, step: usize, text: String, options: Vec<(String, String)>, query: String, cursor: usize },
     Confirm { draft: Draft },
 }
@@ -171,6 +189,7 @@ pub struct App {
     pub cfg: Config,
     pub ctx: Captured,
     pub snapshot: Snapshot,
+    pub machines: Machines,
     pub commands: Vec<Command>,
     pub command_errors: Vec<String>,
     pub command_files: Vec<PathBuf>,
@@ -205,11 +224,13 @@ impl App {
         let snapshot = client.snapshot()?;
         let resolved = resolve::resolve(&client, &ctx, &plugin_id);
         let st = state::load();
+        let machines = Machines::new(cfg.machines_dir(), client.path(), Duration::from_millis(cfg.remote_poll_ms.max(250)));
         let mut app = Self {
             client,
             cfg,
             ctx,
             snapshot,
+            machines,
             commands: resolved.commands,
             command_errors: resolved.errors,
             command_files: resolved.files,
@@ -244,6 +265,7 @@ impl App {
         if let Ok(s) = self.client.snapshot() {
             self.snapshot = s;
         }
+        self.machines.tick();
         let keep = self.selected().map(|i| i.id.clone());
         self.rebuild();
         if let Some(id) = keep {
@@ -337,16 +359,35 @@ impl App {
         self.filtered.get(self.cursor).map(|&i| &self.items[i])
     }
 
+    pub fn snapshot_of(&self, machine: Option<&str>) -> &Snapshot {
+        machine.and_then(|m| self.machines.get(m)).map(|m| &m.snapshot).unwrap_or(&self.snapshot)
+    }
+
+    pub fn client_of(&self, machine: Option<&str>) -> &Client {
+        machine.and_then(|m| self.machines.get(m)).map(|m| &m.client).unwrap_or(&self.client)
+    }
+
+    /// The local snapshot first, then every connected Machine.
+    fn sources(&self) -> Vec<(Option<&str>, &Snapshot)> {
+        let mut v = vec![(None, &self.snapshot)];
+        v.extend(self.machines.connected().map(|m| (Some(m.name.as_str()), &m.snapshot)));
+        v
+    }
+
     fn agent_items(&self) -> Vec<Item> {
-        let mut agents: Vec<&crate::herdr::Agent> = self.snapshot.agents.iter().collect();
-        agents.sort_by_key(|a| a.agent_status.priority());
-        agents
-            .into_iter()
+        let mut items: Vec<Item> = self.sources().into_iter().flat_map(|(m, s)| self.agents_of(m, s)).collect();
+        items.sort_by_key(|i| i.status.unwrap_or_default().priority());
+        items
+    }
+
+    fn agents_of(&self, machine: Option<&str>, snap: &Snapshot) -> Vec<Item> {
+        snap.agents
+            .iter()
             .map(|a| {
-                let ws = self.snapshot.workspace_label(&a.workspace_id);
+                let ws = snap.workspace_label(&a.workspace_id);
                 let title = a.terminal_title_stripped.clone().or_else(|| a.title.clone()).unwrap_or_default();
                 let kind = a.display_agent.clone().or_else(|| a.agent.clone()).unwrap_or_default();
-                let mut meta = vec![];
+                let mut meta = machine_seg(machine);
                 let row_title = match &a.name {
                     Some(n) => {
                         if !title.is_empty() && title != *n {
@@ -364,73 +405,81 @@ impl App {
                 meta.push(seg(ws.clone(), Tone::Workspace));
                 Item {
                     kind: Kind::Agent,
-                    id: format!("agent:{}", a.pane_id),
+                    id: scoped(format!("agent:{}", a.pane_id), machine),
                     title: row_title,
                     meta,
                     status: Some(a.agent_status),
                     depth: 0,
-                    current: self.ctx.pane_id.as_deref() == Some(a.pane_id.as_str()),
-                    hay: vec![a.display_name(), title, ws, kind],
+                    current: machine.is_none() && self.ctx.pane_id.as_deref() == Some(a.pane_id.as_str()),
+                    hay: [a.display_name(), title, ws, kind].into_iter().chain(machine.map(str::to_string)).collect(),
                     item_ref: Some(ItemRef::Agent { pane_id: a.pane_id.clone(), target: a.target().to_string(), workspace_id: a.workspace_id.clone() }),
+                    machine: machine.map(str::to_string),
                 }
             })
             .collect()
     }
 
-    fn workspace_dir(&self, w: &crate::herdr::Workspace) -> String {
+    fn workspace_dir(snap: &Snapshot, w: &crate::herdr::Workspace) -> String {
         w.worktree
             .as_ref()
             .map(|wt| wt.checkout_path.clone())
             .or_else(|| w.cwd.clone())
-            .or_else(|| self.snapshot.panes.iter().find(|p| p.workspace_id == w.workspace_id).and_then(|p| p.cwd.clone()))
+            .or_else(|| snap.panes.iter().find(|p| p.workspace_id == w.workspace_id).and_then(|p| p.cwd.clone()))
             .unwrap_or_default()
     }
 
-    fn workspace_row(&self, w: &crate::herdr::Workspace) -> Item {
-        let dir = self.workspace_dir(w);
-        let panes: Vec<&crate::herdr::Pane> = self.snapshot.panes.iter().filter(|p| p.workspace_id == w.workspace_id).collect();
-        let mut meta = activity(panes.iter().filter(|p| self.snapshot.agent_in_pane(&p.pane_id).is_some()).map(|p| p.agent_status));
+    fn workspace_row(&self, machine: Option<&str>, snap: &Snapshot, w: &crate::herdr::Workspace) -> Item {
+        let dir = Self::workspace_dir(snap, w);
+        let panes: Vec<&crate::herdr::Pane> = snap.panes.iter().filter(|p| p.workspace_id == w.workspace_id).collect();
+        let mut meta = machine_seg(machine);
+        meta.extend(activity(panes.iter().filter(|p| snap.agent_in_pane(&p.pane_id).is_some()).map(|p| p.agent_status)));
         if !dir.is_empty() {
             meta.push(seg(crate::context::short_path(&dir), Tone::Path));
         }
         Item {
             kind: Kind::Workspace,
-            id: format!("ws:{}", w.workspace_id),
+            id: scoped(format!("ws:{}", w.workspace_id), machine),
             title: format!("{} ({})", w.label, panes.len()),
             meta,
             status: None,
             depth: 0,
-            current: self.ctx.workspace_id.as_deref() == Some(w.workspace_id.as_str()),
-            hay: vec![w.label.clone(), dir.rsplit('/').next().unwrap_or("").to_string()],
+            current: machine.is_none() && self.ctx.workspace_id.as_deref() == Some(w.workspace_id.as_str()),
+            hay: [w.label.clone(), dir.rsplit('/').next().unwrap_or("").to_string()].into_iter().chain(machine.map(str::to_string)).collect(),
             item_ref: Some(ItemRef::Workspace(w.workspace_id.clone())),
+            machine: machine.map(str::to_string),
         }
     }
 
     fn workspace_items(&self) -> Vec<Item> {
+        self.sources().into_iter().flat_map(|(m, s)| self.tree_of(m, s)).collect()
+    }
+
+    fn tree_of(&self, machine: Option<&str>, snap: &Snapshot) -> Vec<Item> {
         let mut out = vec![];
-        for w in &self.snapshot.workspaces {
-            out.push(self.workspace_row(w));
-            let tabs: Vec<&crate::herdr::Tab> = self.snapshot.tabs.iter().filter(|t| t.workspace_id == w.workspace_id).collect();
+        for w in &snap.workspaces {
+            out.push(self.workspace_row(machine, snap, w));
+            let tabs: Vec<&crate::herdr::Tab> = snap.tabs.iter().filter(|t| t.workspace_id == w.workspace_id).collect();
             let show_tabs = tabs.len() > 1;
             for t in tabs {
-                let panes: Vec<&crate::herdr::Pane> = self.snapshot.panes.iter().filter(|p| p.tab_id == t.tab_id).collect();
+                let panes: Vec<&crate::herdr::Pane> = snap.panes.iter().filter(|p| p.tab_id == t.tab_id).collect();
                 if show_tabs {
                     let mut meta = vec![seg(format!("{} panes", panes.len()), Tone::Dim)];
-                    meta.extend(activity(panes.iter().filter(|p| self.snapshot.agent_in_pane(&p.pane_id).is_some()).map(|p| p.agent_status)));
+                    meta.extend(activity(panes.iter().filter(|p| snap.agent_in_pane(&p.pane_id).is_some()).map(|p| p.agent_status)));
                     out.push(Item {
                         kind: Kind::Tab,
-                        id: format!("tab:{}", t.tab_id),
+                        id: scoped(format!("tab:{}", t.tab_id), machine),
                         title: t.label.clone(),
                         meta,
                         status: None,
                         depth: 1,
                         current: false,
-                        hay: manual_tab_label(t).into_iter().chain([w.label.clone()]).collect(),
+                        hay: manual_tab_label(t).into_iter().chain([w.label.clone()]).chain(machine.map(str::to_string)).collect(),
                         item_ref: Some(ItemRef::Tab { tab_id: t.tab_id.clone(), workspace_id: w.workspace_id.clone() }),
+                        machine: machine.map(str::to_string),
                     });
                 }
                 for p in panes {
-                    let agent = self.snapshot.agent_in_pane(&p.pane_id);
+                    let agent = snap.agent_in_pane(&p.pane_id);
                     let name = p
                         .label
                         .clone()
@@ -451,14 +500,15 @@ impl App {
                     }
                     out.push(Item {
                         kind: Kind::Pane,
-                        id: format!("pane:{}", p.pane_id),
+                        id: scoped(format!("pane:{}", p.pane_id), machine),
                         title: name.clone(),
                         meta,
                         status: agent.map(|_| p.agent_status),
                         depth: if show_tabs { 2 } else { 1 },
-                        current: self.ctx.pane_id.as_deref() == Some(p.pane_id.as_str()),
-                        hay: [name].into_iter().chain(manual_tab_label(t)).chain([w.label.clone(), cwd.rsplit('/').next().unwrap_or("").to_string()]).collect(),
+                        current: machine.is_none() && self.ctx.pane_id.as_deref() == Some(p.pane_id.as_str()),
+                        hay: [name].into_iter().chain(manual_tab_label(t)).chain([w.label.clone(), cwd.rsplit('/').next().unwrap_or("").to_string()]).chain(machine.map(str::to_string)).collect(),
                         item_ref: Some(ItemRef::Pane { pane_id: p.pane_id.clone(), tab_id: t.tab_id.clone(), workspace_id: w.workspace_id.clone(), has_agent: agent.is_some() }),
+                        machine: machine.map(str::to_string),
                     });
                 }
             }
@@ -481,6 +531,7 @@ impl App {
                 current: false,
                 hay: c.search_text(),
                 item_ref: None,
+                machine: None,
             })
             .collect();
         items.sort_by_key(|i| std::cmp::Reverse(self.usage.count(&i.usage_key())));
@@ -489,7 +540,9 @@ impl App {
 
     fn all_items(&self) -> Vec<Item> {
         let mut out = self.agent_items();
-        out.extend(self.snapshot.workspaces.iter().map(|w| self.workspace_row(w)));
+        for (m, s) in self.sources() {
+            out.extend(s.workspaces.iter().map(|w| self.workspace_row(m, s, w)));
+        }
         out.extend(self.command_items());
         out
     }
@@ -586,19 +639,23 @@ impl App {
                 self.preview = !self.preview;
                 state::save(&state::State { preview: self.preview });
             }
-            'N' => self.start_builtin(Builtin::NewWorkspace, None),
-            'a' => self.start_builtin(Builtin::StartAgent, self.selected().and_then(|i| i.item_ref.clone())),
-            'r' => match self.selected().map(|i| (i.kind.clone(), i.item_ref.clone())) {
-                Some((Kind::Workspace, r)) => self.start_builtin(Builtin::RenameWorkspace, r),
-                Some((Kind::Tab, r)) => self.start_builtin(Builtin::RenameTab, r),
-                Some((Kind::Pane, r)) => self.start_builtin(Builtin::RenameTab, r),
-                Some((Kind::Agent, r)) => self.start_builtin(Builtin::RenameAgent, r),
+            'N' => self.start_builtin(Builtin::NewWorkspace, None, None),
+            'a' => {
+                let sel = self.selected().map(|i| (i.item_ref.clone(), i.machine.clone()));
+                let (r, m) = sel.unwrap_or_default();
+                self.start_builtin(Builtin::StartAgent, r, m);
+            }
+            'r' => match self.selected().map(|i| (i.kind.clone(), i.item_ref.clone(), i.machine.clone())) {
+                Some((Kind::Workspace, r, m)) => self.start_builtin(Builtin::RenameWorkspace, r, m),
+                Some((Kind::Tab, r, m)) => self.start_builtin(Builtin::RenameTab, r, m),
+                Some((Kind::Pane, r, m)) => self.start_builtin(Builtin::RenameTab, r, m),
+                Some((Kind::Agent, r, m)) => self.start_builtin(Builtin::RenameAgent, r, m),
                 _ => {}
             },
-            'x' => match self.selected().map(|i| (i.kind.clone(), i.item_ref.clone())) {
-                Some((Kind::Workspace, r)) => self.start_builtin(Builtin::CloseWorkspace, r),
-                Some((Kind::Tab, r)) => self.start_builtin(Builtin::CloseTab, r),
-                Some((Kind::Pane, r)) | Some((Kind::Agent, r)) => self.start_builtin(Builtin::ClosePane, r),
+            'x' => match self.selected().map(|i| (i.kind.clone(), i.item_ref.clone(), i.machine.clone())) {
+                Some((Kind::Workspace, r, m)) => self.start_builtin(Builtin::CloseWorkspace, r, m),
+                Some((Kind::Tab, r, m)) => self.start_builtin(Builtin::CloseTab, r, m),
+                Some((Kind::Pane, r, m)) | Some((Kind::Agent, r, m)) => self.start_builtin(Builtin::ClosePane, r, m),
                 _ => {}
             },
             'e' => {
@@ -606,7 +663,7 @@ impl App {
                     if let Class::User { file, .. } = &self.commands[i].class {
                         let mut cmd = builtins::item_action(Builtin::EditCommandFiles, "Edit command file");
                         cmd.inputs.clear();
-                        let draft = Draft { command: cmd, item: None, answers: HashMap::from([("file".to_string(), file.display().to_string())]) };
+                        let draft = Draft { command: cmd, item: None, machine: None, answers: HashMap::from([("file".to_string(), file.display().to_string())]) };
                         self.finish(draft);
                     }
                 }
@@ -621,16 +678,16 @@ impl App {
         match item.kind {
             Kind::Command(i) => {
                 let cmd = self.commands[i].clone();
-                self.start_command(cmd, None);
+                self.start_command(cmd, None, None);
             }
-            Kind::Workspace => self.start_builtin(Builtin::FocusWorkspace, item.item_ref),
-            Kind::Tab => self.start_builtin(Builtin::FocusTab, item.item_ref),
-            Kind::Pane => self.start_builtin(Builtin::FocusPane, item.item_ref),
-            Kind::Agent => self.start_builtin(Builtin::FocusAgent, item.item_ref),
+            Kind::Workspace => self.start_builtin(Builtin::FocusWorkspace, item.item_ref, item.machine),
+            Kind::Tab => self.start_builtin(Builtin::FocusTab, item.item_ref, item.machine),
+            Kind::Pane => self.start_builtin(Builtin::FocusPane, item.item_ref, item.machine),
+            Kind::Agent => self.start_builtin(Builtin::FocusAgent, item.item_ref, item.machine),
         }
     }
 
-    fn start_builtin(&mut self, b: Builtin, item: Option<ItemRef>) {
+    fn start_builtin(&mut self, b: Builtin, item: Option<ItemRef>, machine: Option<String>) {
         let title = match b {
             Builtin::FocusWorkspace | Builtin::FocusTab | Builtin::FocusPane | Builtin::FocusAgent => "Focus",
             Builtin::NewWorkspace => "New workspace",
@@ -645,7 +702,7 @@ impl App {
             _ => "Run",
         };
         let cmd = builtins::item_action(b, title);
-        self.start_command(cmd, item);
+        self.start_command(cmd, item, machine);
     }
 
     pub fn actions_for(&self, item: &Item) -> Vec<(Command, Option<ItemRef>)> {
@@ -688,10 +745,10 @@ impl App {
     fn open_menu(&mut self) {
         let Some(item) = self.selected().cloned() else { return };
         let actions = self.actions_for(&item);
-        self.flow = Some(Flow::Menu { actions, cursor: 0, query: String::new() });
+        self.flow = Some(Flow::Menu { actions, machine: item.machine.clone(), cursor: 0, query: String::new() });
     }
 
-    fn start_command(&mut self, command: Command, item: Option<ItemRef>) {
+    fn start_command(&mut self, command: Command, item: Option<ItemRef>, machine: Option<String>) {
         let item = match item {
             None if !command.on.is_empty() => match self.implicit_item(&command.on) {
                 Some(i) => Some(i),
@@ -703,7 +760,7 @@ impl App {
             },
             other => other,
         };
-        let draft = Draft { command, item, answers: HashMap::new() };
+        let draft = Draft { command, item, machine, answers: HashMap::new() };
         self.advance(draft, 0);
     }
 
@@ -755,10 +812,18 @@ impl App {
         if let Class::Builtin(Builtin::EditCommandFiles) = command.class {
             command.cwd = None;
         }
-        let item_vars = draft.item.as_ref().map(|i| run::item_vars(&self.snapshot, i)).unwrap_or_default();
-        let plan = Plan { command, answers, ctx: self.ctx.clone(), item: draft.item, item_vars, palette_pane: self.palette_pane.clone() };
-        if plan.command.keep_open {
-            let rt = Runtime { client: &self.client, cfg: &self.cfg, plugin_id: self.plugin_id.clone() };
+        let machine = draft.machine.as_deref();
+        let mut item_vars = draft.item.as_ref().map(|i| run::item_vars(self.snapshot_of(machine), i)).unwrap_or_default();
+        let socket = machine.map(|m| self.client_of(Some(m)).path().to_path_buf());
+        if let (Some(m), Some(s)) = (machine, &socket) {
+            item_vars.push(("item.machine".into(), m.to_string()));
+            item_vars.push(("item.socket".into(), s.display().to_string()));
+        }
+        let plan = Plan { command, answers, ctx: self.ctx.clone(), item: draft.item, item_vars, palette_pane: self.palette_pane.clone(), machine: draft.machine.clone(), socket };
+        // Focusing on another Machine cannot bring it on screen, so the Palette stays up to say so.
+        let remote_focus = plan.machine.is_some() && matches!(plan.command.class, Class::Builtin(Builtin::FocusWorkspace | Builtin::FocusTab | Builtin::FocusPane | Builtin::FocusAgent));
+        if plan.command.keep_open || remote_focus {
+            let rt = Runtime { client: self.client_of(machine), cfg: &self.cfg, plugin_id: self.plugin_id.clone() };
             match run::execute(&plan, &rt) {
                 Ok(msg) => self.status = Some(msg),
                 Err(e) => self.status = Some(format!("error: {e:#}")),
@@ -821,7 +886,7 @@ impl App {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         let Some(flow) = self.flow.take() else { return };
         match flow {
-            Flow::Menu { actions, mut cursor, mut query } => {
+            Flow::Menu { actions, machine, mut cursor, mut query } => {
                 let hays: Vec<Vec<String>> = actions.iter().map(|(c, _)| vec![c.title.clone()]).collect();
                 let filtered = self.search.rank(&query, hays.iter().map(|v| v.as_slice()));
                 match key.code {
@@ -829,7 +894,7 @@ impl App {
                     KeyCode::Enter => {
                         if let Some(&i) = filtered.get(cursor) {
                             let (cmd, item) = actions[i].clone();
-                            self.start_command(cmd, item);
+                            self.start_command(cmd, item, machine);
                         }
                         return;
                     }
@@ -847,7 +912,7 @@ impl App {
                     }
                     _ => {}
                 }
-                self.flow = Some(Flow::Menu { actions, cursor, query });
+                self.flow = Some(Flow::Menu { actions, machine, cursor, query });
             }
             Flow::Input { mut draft, step, mut text, options, mut query, mut cursor } => {
                 let input = draft.command.inputs[step].clone();
@@ -907,27 +972,31 @@ impl App {
             Some(ItemRef::Pane { pane_id, .. }) => pane_id.clone(),
             _ => return,
         };
+        let key = item.id.clone();
+        let machine = item.machine.clone();
         let stale = match &self.preview_cache {
-            Some((id, _, at)) => *id != pane_id || at.elapsed() > Duration::from_millis(1000),
+            Some((id, _, at)) => *id != key || at.elapsed() > Duration::from_millis(1000),
             None => true,
         };
         if stale {
-            let text = self.client.read_pane(&pane_id, self.cfg.preview_lines).unwrap_or_default();
-            self.preview_cache = Some((pane_id, text, Instant::now()));
+            let text = self.client_of(machine.as_deref()).read_pane(&pane_id, self.cfg.preview_lines).unwrap_or_default();
+            self.preview_cache = Some((key, text, Instant::now()));
         }
     }
 
     /// Styled lines for the preview panel of the selected Item.
     pub fn preview_lines(&self, width: usize) -> Vec<Vec<Seg>> {
         let Some(item) = self.selected() else { return vec![] };
-        let s = &self.snapshot;
+        let s = self.snapshot_of(item.machine.as_deref());
         let path = |c: &str| seg(crate::context::shorten_home(std::path::Path::new(c)), Tone::Path);
+        let machine_line = || item.machine.as_ref().map(|m| field("machine", seg(m, Tone::Machine)));
         match (&item.kind, &item.item_ref) {
             (Kind::Agent, Some(ItemRef::Agent { pane_id, .. })) | (Kind::Pane, Some(ItemRef::Pane { pane_id, .. })) => {
                 let mut lines = vec![];
                 if let Some(a) = s.agent_in_pane(pane_id) {
                     let st = Tone::Status(a.agent_status);
                     lines.push(vec![seg(a.agent_status.glyph(), st), seg(" ", Tone::Plain), seg(a.display_name(), Tone::Title), seg("  ", Tone::Plain), seg(a.status_text(), st)]);
+                    lines.extend(machine_line());
                     lines.push(field("workspace", seg(s.workspace_label(&a.workspace_id), Tone::Workspace)));
                     if let Some(c) = a.foreground_cwd.as_ref().or(a.cwd.as_ref()) {
                         lines.push(field("cwd", path(c)));
@@ -937,12 +1006,13 @@ impl App {
                     }
                 } else if let Some(p) = s.pane(pane_id) {
                     lines.push(vec![seg("pane ", Tone::Dim), seg(&p.pane_id, Tone::Title)]);
+                    lines.extend(machine_line());
                     if let Some(c) = p.foreground_cwd.as_ref().or(p.cwd.as_ref()) {
                         lines.push(field("cwd", path(c)));
                     }
                 }
                 if let Some((id, text, _)) = &self.preview_cache {
-                    if id == pane_id {
+                    if *id == item.id {
                         lines.push(rule(width));
                         lines.extend(text.lines().map(|l| vec![seg(l.trim_end(), Tone::Plain)]));
                     }
@@ -953,6 +1023,7 @@ impl App {
                 let mut lines = vec![];
                 if let Some(w) = s.workspace(id) {
                     lines.push(vec![seg(w.agent_status.glyph(), Tone::Status(w.agent_status)), seg(" ", Tone::Plain), seg(&w.label, Tone::Title)]);
+                    lines.extend(machine_line());
                     if let Some(wt) = &w.worktree {
                         lines.push(field("worktree", path(&wt.checkout_path)));
                         lines.push(field("repo", path(&wt.repo_root)));

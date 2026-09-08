@@ -51,6 +51,11 @@ pub struct Plan {
     #[serde(default)]
     pub item_vars: Vec<(String, String)>,
     pub palette_pane: Option<String>,
+    /// Set when the Item lives on another Machine; the plan then runs against `socket`.
+    #[serde(default)]
+    pub machine: Option<String>,
+    #[serde(default)]
+    pub socket: Option<PathBuf>,
 }
 
 pub struct Runtime<'a> {
@@ -107,7 +112,21 @@ impl Plan {
     }
 
     pub fn cwd(&self) -> String {
-        self.command.cwd.as_deref().map(|c| files::expand_home(&self.render(c))).unwrap_or_else(|| self.ctx.dir_str())
+        self.command.cwd.as_deref().map(|c| files::expand_home(&self.render(c))).unwrap_or_else(|| self.dir())
+    }
+
+    /// Where new panes start: the Context Directory, or the Item's own directory on another Machine.
+    pub fn dir(&self) -> String {
+        if self.machine.is_some() {
+            if let Some((_, cwd)) = self.item_vars.iter().find(|(k, v)| k == "item.cwd" && !v.is_empty()) {
+                return cwd.clone();
+            }
+        }
+        self.ctx.dir_str()
+    }
+
+    fn where_(&self) -> String {
+        self.machine.as_ref().map(|m| format!(" on {m}; switch machine in Herdr to see it")).unwrap_or_default()
     }
 
     pub fn resolved_run(&self) -> String {
@@ -205,7 +224,7 @@ fn builtin(b: Builtin, plan: &Plan, rt: &Runtime) -> Result<String> {
         Builtin::FocusWorkspace => {
             let id = ws().ok_or_else(|| anyhow!("no workspace"))?;
             c.focus_workspace(&id)?;
-            Ok(format!("focused {id}"))
+            Ok(format!("focused {id}{}", plan.where_()))
         }
         Builtin::FocusTab => {
             let id = match item {
@@ -213,12 +232,12 @@ fn builtin(b: Builtin, plan: &Plan, rt: &Runtime) -> Result<String> {
                 _ => plan.get("tab").ok_or_else(|| anyhow!("no tab"))?,
             };
             c.focus_tab(&id)?;
-            Ok(format!("focused {id}"))
+            Ok(format!("focused {id}{}", plan.where_()))
         }
         Builtin::FocusPane => {
             let id = item.and_then(|i| i.pane_id().map(str::to_string)).or_else(|| plan.get("pane")).ok_or_else(|| anyhow!("no pane"))?;
             c.focus_pane(&id)?;
-            Ok(format!("focused {id}"))
+            Ok(format!("focused {id}{}", plan.where_()))
         }
         Builtin::FocusAgent => {
             let target = match item {
@@ -226,7 +245,7 @@ fn builtin(b: Builtin, plan: &Plan, rt: &Runtime) -> Result<String> {
                 _ => plan.get("agent").ok_or_else(|| anyhow!("no agent"))?,
             };
             c.focus_agent(&target)?;
-            Ok(format!("focused {target}"))
+            Ok(format!("focused {target}{}", plan.where_()))
         }
         Builtin::NewWorkspace => {
             let created = c.create_workspace(&plan.ctx.dir_str(), plan.get("label").as_deref(), true, &plan.env())?;
@@ -243,7 +262,7 @@ fn builtin(b: Builtin, plan: &Plan, rt: &Runtime) -> Result<String> {
         }
         Builtin::NewTab => {
             let ws = ws().ok_or_else(|| anyhow!("no workspace"))?;
-            let created = c.create_tab(&ws, &plan.ctx.dir_str(), plan.get("label").as_deref(), true, &plan.env())?;
+            let created = c.create_tab(&ws, &plan.dir(), plan.get("label").as_deref(), true, &plan.env())?;
             Ok(format!("tab {}", created.tab_id))
         }
         Builtin::RenameWorkspace => {
@@ -295,12 +314,12 @@ fn builtin(b: Builtin, plan: &Plan, rt: &Runtime) -> Result<String> {
             let pane = match item {
                 Some(ItemRef::Pane { pane_id, has_agent: false, .. }) => pane_id.clone(),
                 Some(ItemRef::Workspace(id)) => {
-                    let created = c.create_tab(id, &plan.ctx.dir_str(), Some(&name), true, &Env::new())?;
+                    let created = c.create_tab(id, &plan.dir(), Some(&name), true, &Env::new())?;
                     created.pane_id
                 }
                 Some(other) => {
                     let base = other.pane_id().map(str::to_string).or_else(|| plan.ctx.pane_id.clone()).ok_or_else(|| anyhow!("no pane"))?;
-                    c.split(&base, "right", &plan.ctx.dir_str(), true, &Env::new())?
+                    c.split(&base, "right", &plan.dir(), true, &Env::new())?
                 }
                 None => {
                     let base = plan.ctx.pane_id.clone().ok_or_else(|| anyhow!("no pane"))?;
@@ -439,7 +458,9 @@ pub fn defer(plan: &Plan) -> Result<()> {
 pub fn exec_deferred(path: &Path) -> Result<()> {
     let plan: Plan = serde_json::from_str(&std::fs::read_to_string(path)?)?;
     let _ = std::fs::remove_file(path);
-    let client = Client::from_env();
+    let local = Client::from_env();
+    let remote = plan.socket.clone().map(Client::at);
+    let client = remote.as_ref().unwrap_or(&local);
     let start = Instant::now();
     while start.elapsed() < Duration::from_secs(3) && crate::state::is_open() {
         std::thread::sleep(Duration::from_millis(40));
@@ -447,7 +468,7 @@ pub fn exec_deferred(path: &Path) -> Result<()> {
     if let Some(pane) = plan.palette_pane.as_deref().filter(|p| *p != crate::state::POPUP) {
         let start = Instant::now();
         while start.elapsed() < Duration::from_secs(3) {
-            match client.snapshot() {
+            match local.snapshot() {
                 Ok(s) if s.pane(pane).is_none() => break,
                 Ok(_) => std::thread::sleep(Duration::from_millis(40)),
                 Err(_) => break,
@@ -456,12 +477,12 @@ pub fn exec_deferred(path: &Path) -> Result<()> {
     }
     std::thread::sleep(Duration::from_millis(60));
     let cfg = config::load();
-    let rt = Runtime { client: &client, cfg: &cfg, plugin_id: plugin_id() };
+    let rt = Runtime { client, cfg: &cfg, plugin_id: plugin_id() };
     match execute(&plan, &rt) {
         Ok(msg) => log(&format!("ok {}: {msg}", plan.command.id)),
         Err(e) => {
             log(&format!("error {}: {e:#}", plan.command.id));
-            client.notify(&format!("{} failed", plan.command.title), Some(&format!("{e:#}")));
+            local.notify(&format!("{} failed", plan.command.title), Some(&format!("{e:#}")));
         }
     }
     Ok(())
@@ -493,6 +514,8 @@ mod tests {
             item: None,
             item_vars: vec![],
             palette_pane: None,
+            machine: None,
+            socket: None,
         };
         plan.command.run = "git switch {{input.branch}} # {{ctx.dir}} {{ctx.workspace_id}}".into();
         assert_eq!(plan.resolved_run(), "git switch feat # /tmp/x w1");
