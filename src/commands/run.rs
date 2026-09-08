@@ -244,7 +244,16 @@ fn builtin(b: Builtin, plan: &Plan, rt: &Runtime) -> Result<String> {
                 Some(ItemRef::Agent { target, .. }) => target.clone(),
                 _ => plan.get("agent").ok_or_else(|| anyhow!("no agent"))?,
             };
-            c.focus_agent(&target)?;
+            // agent.focus stopped moving the client's viewport in Herdr 0.9.0
+            // (herdrdev/herdr#3760); pane.focus still does, so go through the pane.
+            let pane = match item {
+                Some(ItemRef::Agent { pane_id, .. }) => Some(pane_id.clone()),
+                _ => c.snapshot().ok().and_then(|s| s.agents.iter().find(|a| a.target() == target).map(|a| a.pane_id.clone())),
+            };
+            match pane {
+                Some(p) => c.focus_pane(&p)?,
+                None => c.focus_agent(&target)?,
+            }
             Ok(format!("focused {target}{}", plan.where_()))
         }
         Builtin::NewWorkspace => {

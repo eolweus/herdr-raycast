@@ -13,6 +13,7 @@ Working name herdr-raycast, manifest id `erling.command-palette`, display name "
 ## Host facts that shape the design
 
 - Herdr 0.9.0 on both machines (munin, hostname `erling-test`, and the laptop). Each Machine runs its own server with its own ids; the plugin is linked on each from `~/herdr-plugins/herdr-raycast` (kept in step by `herdr-plugins sync` in dotfiles). In multi-machine mode the client applies its local keybindings and does not send local custom-command bindings to a remote server, so a palette key only works while viewing a Machine that has the plugin linked and the same `[[keys.command]]` entries.
+- Herdr 0.9.0 gave every client its own viewport. `workspace.focus`, `tab.focus` and `pane.focus` still move every attached client; `agent.focus` updates server state only (herdrdev/herdr#3760), so the Focus Agent Built-in goes through the agent's pane. No focus method can address one client.
 - A popup is a per-server session resource: a Palette hosted on one Machine is visible only while the client views that Machine. There is no socket method to switch the client's selected machine. Both facts drive the Machines section below.
 - Agent Status enum: `idle | working | blocked | done | unknown`. `done` = finished while unseen. No last-message API; `terminal_title_stripped` is the free signal, `agent.read --source recent-unwrapped` the paid one.
 - `session.snapshot` returns the whole tree; events are not subscribed (ADR-0002).
