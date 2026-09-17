@@ -6,6 +6,8 @@ use std::path::PathBuf;
 pub struct Config {
     pub width: String,
     pub height: String,
+    pub min_width: u16,
+    pub min_height: u16,
     pub editor: String,
     pub poll_ms: u64,
     pub preview_lines: u32,
@@ -20,6 +22,8 @@ impl Default for Config {
         Self {
             width: "60%".into(),
             height: "60%".into(),
+            min_width: 100,
+            min_height: 24,
             editor: "auto".into(),
             poll_ms: 500,
             preview_lines: 40,
@@ -34,6 +38,19 @@ impl Default for Config {
 impl Config {
     pub fn machines_dir(&self) -> PathBuf {
         PathBuf::from(crate::commands::files::expand_home(&self.machines_dir))
+    }
+}
+
+// Herdr popups take cells or a percent, never both, so the floor is applied here.
+pub fn popup_size(spec: &str, min: u16, available: Option<u16>) -> serde_json::Value {
+    let percent = spec.strip_suffix('%').and_then(|p| p.trim().parse::<u32>().ok());
+    match (percent, available) {
+        (Some(p), Some(avail)) => {
+            let cells = (avail as u32 * p / 100) as u16;
+            if cells >= min { spec.into() } else { min.min(avail).into() }
+        }
+        (Some(_), None) => spec.into(),
+        (None, _) => spec.trim().parse::<u16>().map(|c| c.max(min).into()).unwrap_or_else(|_| spec.into()),
     }
 }
 
@@ -65,5 +82,29 @@ pub fn load() -> Config {
             Config::default()
         }),
         Err(_) => Config::default(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::popup_size;
+    use serde_json::json;
+
+    #[test]
+    fn percent_is_kept_when_it_clears_the_floor() {
+        assert_eq!(popup_size("60%", 100, Some(200)), json!("60%"));
+    }
+
+    #[test]
+    fn floor_replaces_a_small_percent_and_never_exceeds_the_area() {
+        assert_eq!(popup_size("60%", 100, Some(120)), json!(100));
+        assert_eq!(popup_size("60%", 100, Some(80)), json!(80));
+    }
+
+    #[test]
+    fn unknown_area_and_cell_specs() {
+        assert_eq!(popup_size("60%", 100, None), json!("60%"));
+        assert_eq!(popup_size("90", 100, Some(200)), json!(100));
+        assert_eq!(popup_size("140", 100, None), json!(140));
     }
 }

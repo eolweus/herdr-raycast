@@ -97,6 +97,8 @@ Exact matches beat prefix and fuzzy ones, and a hit in the title beats a hit in 
 ```toml
 width = "60%"
 height = "60%"
+min_width = 100          # cells; floor for a percent width on small terminals
+min_height = 24
 editor = "auto"          # or a command; {{file}} is substituted
 poll_ms = 500
 preview_lines = 40

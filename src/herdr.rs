@@ -378,6 +378,19 @@ impl Agent {
     }
 }
 
+#[derive(Debug, Clone, Copy, Deserialize, Default)]
+pub struct Area {
+    pub width: u16,
+    pub height: u16,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct Layout {
+    pub tab_id: String,
+    #[serde(default)]
+    pub area: Area,
+}
+
 #[derive(Debug, Clone, Deserialize, Default)]
 #[allow(dead_code)]
 pub struct Snapshot {
@@ -390,6 +403,8 @@ pub struct Snapshot {
     #[serde(default)]
     pub agents: Vec<Agent>,
     #[serde(default)]
+    pub layouts: Vec<Layout>,
+    #[serde(default)]
     pub focused_workspace_id: Option<String>,
     #[serde(default)]
     pub focused_tab_id: Option<String>,
@@ -398,6 +413,10 @@ pub struct Snapshot {
 }
 
 impl Snapshot {
+    pub fn focused_area(&self) -> Option<Area> {
+        let tab = self.focused_tab_id.as_deref()?;
+        self.layouts.iter().find(|l| l.tab_id == tab).map(|l| l.area)
+    }
     pub fn workspace(&self, id: &str) -> Option<&Workspace> {
         self.workspaces.iter().find(|w| w.workspace_id == id)
     }

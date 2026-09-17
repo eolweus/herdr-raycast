@@ -56,6 +56,7 @@ fn open(args: &[String]) -> Result<()> {
     }
     let ctx = context::Captured::capture(&client);
     let view = view_arg(args).unwrap_or(View::All);
+    let area = client.snapshot().ok().and_then(|s| s.focused_area());
     let mut env = std::collections::HashMap::new();
     env.insert(context::CONTEXT_ENV.to_string(), ctx.to_env_json());
     env.insert("RAYCAST_VIEW".to_string(), view.title().to_lowercase());
@@ -63,8 +64,8 @@ fn open(args: &[String]) -> Result<()> {
         "plugin_id": commands::run::plugin_id(),
         "entrypoint": "palette",
         "placement": "popup",
-        "width": cfg.width,
-        "height": cfg.height,
+        "width": config::popup_size(&cfg.width, cfg.min_width, area.map(|a| a.width)),
+        "height": config::popup_size(&cfg.height, cfg.min_height, area.map(|a| a.height)),
         "cwd": ctx.dir_str(),
         "env": env,
         "focus": true,
