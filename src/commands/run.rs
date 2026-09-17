@@ -266,7 +266,8 @@ fn builtin(b: Builtin, plan: &Plan, rt: &Runtime) -> Result<String> {
                 bail!("branch name required");
             }
             let base = plan.get("base").filter(|b| !b.trim().is_empty()).or_else(|| crate::git::default_base(&plan.ctx.dir));
-            let created = c.create_worktree(&plan.ctx.dir_str(), &branch, base.as_deref(), Some(&branch))?;
+            let source = crate::git::main_checkout(&plan.ctx.dir).unwrap_or_else(|| plan.ctx.dir.clone());
+            let created = c.create_worktree(&source.to_string_lossy(), &branch, base.as_deref(), Some(&branch))?;
             Ok(format!("worktree workspace {}", created.workspace_id))
         }
         Builtin::NewTab => {

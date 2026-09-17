@@ -35,10 +35,14 @@ impl Client {
     }
 
     pub fn call(&self, method: &str, params: Value) -> Result<Value> {
+        self.call_within(self.timeout, method, params)
+    }
+
+    fn call_within(&self, timeout: Duration, method: &str, params: Value) -> Result<Value> {
         let mut stream = UnixStream::connect(&self.path)
             .with_context(|| format!("connect {}", self.path.display()))?;
-        stream.set_read_timeout(Some(self.timeout))?;
-        stream.set_write_timeout(Some(self.timeout))?;
+        stream.set_read_timeout(Some(timeout))?;
+        stream.set_write_timeout(Some(timeout))?;
         let req = json!({"id": "herdr-raycast", "method": method, "params": params});
         stream.write_all(serde_json::to_string(&req)?.as_bytes())?;
         stream.write_all(b"\n")?;
@@ -150,7 +154,9 @@ impl Client {
     }
 
     pub fn create_worktree(&self, cwd: &str, branch: &str, base: Option<&str>, label: Option<&str>) -> Result<Created> {
-        let v = self.call(
+        // Checkout and repo hooks on a large repo outlast the default timeout.
+        let v = self.call_within(
+            Duration::from_secs(180),
             "worktree.create",
             json!({"cwd": cwd, "branch": branch, "base": base, "label": label, "focus": true}),
         )?;

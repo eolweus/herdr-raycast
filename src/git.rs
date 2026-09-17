@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn git(dir: &Path, args: &[&str]) -> Option<String> {
@@ -17,6 +17,13 @@ pub fn default_base(dir: &Path) -> Option<String> {
         .into_iter()
         .find(|r| git(dir, &["rev-parse", "-q", "--verify", &format!("{r}^{{commit}}")]).is_some())
         .map(str::to_string)
+}
+
+/// The main checkout of `dir`'s repo; Herdr refuses to create a worktree from a linked one.
+pub fn main_checkout(dir: &Path) -> Option<PathBuf> {
+    let common = git(dir, &["rev-parse", "--path-format=absolute", "--git-common-dir"])?;
+    let common = Path::new(&common);
+    (common.file_name()? == ".git").then(|| common.parent().map(Path::to_path_buf))?
 }
 
 /// Base refs for a new worktree: the remote default first, then local branches by recency.
@@ -58,6 +65,23 @@ pub fn branch_slug(raw: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn main_checkout_resolves_from_a_linked_worktree() {
+        let tmp = std::env::temp_dir().join(format!("raycast-wt-{}", std::process::id()));
+        let main = tmp.join("main");
+        std::fs::create_dir_all(&main).unwrap();
+        let run = |dir: &std::path::Path, args: &[&str]| {
+            assert!(std::process::Command::new("git").args(args).current_dir(dir).output().unwrap().status.success());
+        };
+        run(&main, &["init", "-q"]);
+        run(&main, &["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "x"]);
+        run(&main, &["worktree", "add", "-q", "../linked"]);
+        let main = main.canonicalize().unwrap();
+        assert_eq!(super::main_checkout(&tmp.join("linked")), Some(main.clone()));
+        assert_eq!(super::main_checkout(&main), Some(main));
+        std::fs::remove_dir_all(&tmp).unwrap();
+    }
+
     use super::*;
 
     #[test]
