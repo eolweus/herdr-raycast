@@ -594,6 +594,9 @@ impl App {
             (_, KeyCode::Char('n' | 'j')) if ctrl => self.cursor = self.move_cursor(1, self.filtered.len()),
             (_, KeyCode::Char('p' | 'k')) if ctrl => self.cursor = self.move_cursor(-1, self.filtered.len()),
             (_, KeyCode::Char('o')) if ctrl => self.open_menu(),
+            (_, KeyCode::Char(c @ '1'..='4')) if key.modifiers.contains(KeyModifiers::SUPER) => {
+                self.set_view(View::ALL[c as usize - '1' as usize]);
+            }
             (_, KeyCode::Char('u')) if ctrl => {
                 self.query.clear();
                 self.cursor = 0;

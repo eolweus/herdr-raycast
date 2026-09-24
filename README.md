@@ -42,7 +42,7 @@ Opens in Insert mode. Escape enters Normal mode; Escape does nothing there.
 |---|---|---|
 | type | Insert | filter |
 | `i` `/` | Normal | back to Insert |
-| `1`-`4`, `A` `a` `w` `c`, Tab, Shift+Tab | both (digits and letters Normal only) | switch View |
+| `1`-`4`, `A` `a` `w` `c`, cmd+`1`-`4`, Tab, Shift+Tab | both (bare digits and letters Normal only) | switch View |
 | `j` `k` ↑ ↓ ^n ^p ^j ^k | Normal / both | move |
 | Enter | both | focus the Item, or run the Command |
 | ^o | both | action menu for the Item |

@@ -61,7 +61,7 @@ Opens in Insert. Escape enters Normal. Escape in Normal does nothing.
 | `/`, `i` | Normal | to Insert |
 | `q` | Normal | close |
 | ctrl+c | both | close |
-| `1`-`4`, `A`/`a`/`w`/`c`, Tab, Shift+Tab | both (digits and letters Normal only) | switch View |
+| `1`-`4`, `A`/`a`/`w`/`c`, cmd+`1`-`4`, Tab, Shift+Tab | both (bare digits and letters Normal only) | switch View |
 | `j`/`k`, arrows, ctrl+n/ctrl+p, ctrl+j/ctrl+k | Normal / both | move |
 | Enter | both | primary action |
 | `p` | Normal | toggle Preview |
