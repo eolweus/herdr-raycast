@@ -404,7 +404,7 @@ fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
             (Some(Flow::Input { .. }), _) => "⏎ next  esc cancel".into(),
             (Some(Flow::Confirm { .. }), _) => "y confirm  any key cancels".into(),
             (None, Mode::Insert) => "esc normal  tab views  ⏎ open  ^o actions  ^c quit".into(),
-            (None, Mode::Normal) => "i search  1-4 views  ⏎ open  ^o actions  r rename  x close  N new ws  a agent  p preview  q quit".into(),
+            (None, Mode::Normal) => "i search  A a w c views  ⏎ open  ^o actions  r rename  x close  N new ws  p preview  q quit".into(),
         }
     };
     let style = if app.status.as_deref().is_some_and(|s| s.starts_with("error")) {

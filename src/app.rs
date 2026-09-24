@@ -629,6 +629,10 @@ impl App {
             '2' => self.set_view(View::Agents),
             '3' => self.set_view(View::Workspaces),
             '4' => self.set_view(View::Commands),
+            'A' => self.set_view(View::All),
+            'a' => self.set_view(View::Agents),
+            'w' => self.set_view(View::Workspaces),
+            'c' => self.set_view(View::Commands),
             'j' => self.cursor = self.move_cursor(1, self.filtered.len()),
             'k' => self.cursor = self.move_cursor(-1, self.filtered.len()),
             'g' => self.cursor = 0,
@@ -640,11 +644,6 @@ impl App {
                 state::save(&state::State { preview: self.preview });
             }
             'N' => self.start_builtin(Builtin::NewWorkspace, None, None),
-            'a' => {
-                let sel = self.selected().map(|i| (i.item_ref.clone(), i.machine.clone()));
-                let (r, m) = sel.unwrap_or_default();
-                self.start_builtin(Builtin::StartAgent, r, m);
-            }
             'r' => match self.selected().map(|i| (i.kind.clone(), i.item_ref.clone(), i.machine.clone())) {
                 Some((Kind::Workspace, r, m)) => self.start_builtin(Builtin::RenameWorkspace, r, m),
                 Some((Kind::Tab, r, m)) => self.start_builtin(Builtin::RenameTab, r, m),

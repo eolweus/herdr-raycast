@@ -61,13 +61,12 @@ Opens in Insert. Escape enters Normal. Escape in Normal does nothing.
 | `/`, `i` | Normal | to Insert |
 | `q` | Normal | close |
 | ctrl+c | both | close |
-| `1`-`4`, Tab, Shift+Tab | both (letters Normal only) | switch View |
+| `1`-`4`, `A`/`a`/`w`/`c`, Tab, Shift+Tab | both (digits and letters Normal only) | switch View |
 | `j`/`k`, arrows, ctrl+n/ctrl+p, ctrl+j/ctrl+k | Normal / both | move |
 | Enter | both | primary action |
 | `p` | Normal | toggle Preview |
 | ctrl+o | both | action menu for the Item |
 | `N` | Normal | new workspace |
-| `a` | Normal, pane or workspace Item | split a pane and start an agent there |
 | `r` | Normal | rename workspace, tab or agent |
 | `x` then `y` | Normal | close workspace, tab or pane |
 | `e` | Normal, Command Item | edit the defining Command File |
