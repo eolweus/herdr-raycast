@@ -10,12 +10,16 @@ use unicode_width::UnicodeWidthStr;
 
 pub fn draw(f: &mut Frame, app: &App) {
     let area = f.area();
+    let search = search_lines(app, area.width as usize);
+    let search_height = search.len().clamp(1, (area.height as usize / 2).max(1));
     let rows = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(1), Constraint::Length(1), Constraint::Min(1), Constraint::Length(1)])
+        .constraints([Constraint::Length(1), Constraint::Length(search_height as u16), Constraint::Min(1), Constraint::Length(1)])
         .split(area);
     draw_header(f, app, rows[0]);
-    draw_search(f, app, rows[1]);
+    // The cursor sits at the end, so an input taller than its row shows its tail.
+    let skip = search.len().saturating_sub(search_height);
+    f.render_widget(Paragraph::new(search.into_iter().skip(skip).collect::<Vec<_>>()), rows[1]);
     let body = rows[2];
     if app.preview && app.flow.is_none() {
         let cols = Layout::default()
@@ -96,7 +100,7 @@ fn tone_style(t: Tone) -> Style {
     }
 }
 
-fn draw_search(f: &mut Frame, app: &App, area: Rect) {
+fn search_lines(app: &App, width: usize) -> Vec<Line<'static>> {
     let (prompt, text, cursor_visible) = match &app.flow {
         Some(Flow::Menu { query, .. }) => ("actions".to_string(), query.clone(), true),
         Some(Flow::Input { draft, step, text, query, .. }) => {
@@ -124,7 +128,31 @@ fn draw_search(f: &mut Frame, app: &App, area: Rect) {
     if cursor_visible {
         spans.push(Span::styled(" ", Style::default().add_modifier(Modifier::REVERSED)));
     }
-    f.render_widget(Paragraph::new(Line::from(spans)), area);
+    wrap(spans, width)
+}
+
+fn wrap(spans: Vec<Span<'static>>, width: usize) -> Vec<Line<'static>> {
+    let width = width.max(2);
+    let mut lines = vec![vec![]];
+    let mut used = 0;
+    for span in spans {
+        let mut chunk = String::new();
+        for c in span.content.chars() {
+            let w = if c == '\n' { 0 } else { unicode_width::UnicodeWidthChar::width(c).unwrap_or(0) };
+            if c == '\n' || used + w > width {
+                lines.last_mut().unwrap().push(Span::styled(std::mem::take(&mut chunk), span.style));
+                lines.push(vec![Span::raw(" ")]);
+                used = 1;
+                if c == '\n' {
+                    continue;
+                }
+            }
+            chunk.push(c);
+            used += w;
+        }
+        lines.last_mut().unwrap().push(Span::styled(chunk, span.style));
+    }
+    lines.into_iter().map(Line::from).collect()
 }
 
 struct Row {
@@ -449,4 +477,19 @@ fn truncate_left(s: &str, max: usize) -> String {
         out.insert(0, *c);
     }
     format!("…{out}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn text(lines: &[Line]) -> Vec<String> {
+        lines.iter().map(|l| l.spans.iter().map(|s| s.content.as_ref()).collect()).collect()
+    }
+
+    #[test]
+    fn wraps_at_width_and_newlines() {
+        let lines = wrap(vec![Span::raw(" ab › "), Span::raw("cdefgh\nij")], 6);
+        assert_eq!(text(&lines), vec![" ab › ", " cdefg", " h", " ij"]);
+    }
 }
