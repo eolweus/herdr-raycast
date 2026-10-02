@@ -52,6 +52,7 @@ Opens in Insert mode. Escape enters Normal mode; Escape does nothing there.
 | `x` then `y` | Normal | close workspace, tab or pane |
 | `e` | Normal | edit the Command File defining the Command |
 | `q`, ^c, the key bound to `open` | Normal / both | close (the `open-<view>` keys switch View, or close when already there) |
+| ^g | text input | edit the value in `$VISUAL`, `$EDITOR` or nvim |
 
 ## Commands
 

@@ -206,6 +206,7 @@ pub struct App {
     pub flow: Option<Flow>,
     pub status: Option<String>,
     pub quit: bool,
+    pub edit_in_editor: bool,
     pub usage: state::Usage,
     search: Search,
     last_poll: Instant,
@@ -247,6 +248,7 @@ impl App {
             flow: None,
             status: None,
             quit: false,
+            edit_in_editor: false,
             usage: state::Usage::load(),
             search: Search::default(),
             last_poll: Instant::now(),
@@ -949,6 +951,7 @@ impl App {
                     KeyCode::Char('u') if ctrl => {
                         if is_text { text.clear(); } else { query.clear(); cursor = 0; }
                     }
+                    KeyCode::Char('g') if ctrl && is_text => self.edit_in_editor = true,
                     KeyCode::Down => cursor = (cursor + 1) % filtered.len().max(1),
                     KeyCode::Up => cursor = (cursor + filtered.len().max(1) - 1) % filtered.len().max(1),
                     KeyCode::Char('n' | 'j') if ctrl => cursor = (cursor + 1) % filtered.len().max(1),
@@ -964,6 +967,19 @@ impl App {
                 KeyCode::Char('y') | KeyCode::Enter => self.finish(draft),
                 _ => {}
             },
+        }
+    }
+
+    pub fn input_text(&self) -> Option<&str> {
+        match &self.flow {
+            Some(Flow::Input { draft, step, text, .. }) if matches!(draft.command.inputs[*step].kind, InputKind::Text) => Some(text),
+            _ => None,
+        }
+    }
+
+    pub fn set_input_text(&mut self, value: String) {
+        if let Some(Flow::Input { text, .. }) = &mut self.flow {
+            *text = value;
         }
     }
 

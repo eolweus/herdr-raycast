@@ -429,6 +429,7 @@ fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
     } else {
         match (&app.flow, app.mode) {
             (Some(Flow::Menu { .. }), _) => "⏎ run  esc back  type to filter".into(),
+            (Some(Flow::Input { .. }), _) if app.input_text().is_some() => "⏎ next  ^g edit in $EDITOR  esc cancel".into(),
             (Some(Flow::Input { .. }), _) => "⏎ next  esc cancel".into(),
             (Some(Flow::Confirm { .. }), _) => "y confirm  any key cancels".into(),
             (None, Mode::Insert) => "esc normal  tab views  ⏎ open  ^o actions  ^c quit".into(),

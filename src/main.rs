@@ -99,6 +99,9 @@ fn run_ui(view: Option<View>) -> Result<()> {
                     _ => {}
                 }
             }
+            if std::mem::take(&mut app.edit_in_editor) {
+                edit_input(&mut terminal, &mut app);
+            }
             app.tick();
             if app.quit {
                 return Ok(());
@@ -109,6 +112,35 @@ fn run_ui(view: Option<View>) -> Result<()> {
     ratatui::restore();
     state::clear_open();
     result
+}
+
+fn edit_input(terminal: &mut ratatui::DefaultTerminal, app: &mut app::App) {
+    let Some(text) = app.input_text() else { return };
+    let path = std::env::temp_dir().join(format!("herdr-raycast-{}.md", std::process::id()));
+    if let Err(e) = std::fs::write(&path, text) {
+        app.status = Some(format!("error: {e}"));
+        return;
+    }
+    let _ = execute!(std::io::stdout(), PopKeyboardEnhancementFlags);
+    ratatui::restore();
+    let status = std::process::Command::new("sh").arg("-c").arg(format!("{} \"$1\"", editor())).arg("sh").arg(&path).status();
+    *terminal = ratatui::init();
+    let _ = execute!(std::io::stdout(), PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES));
+    let _ = terminal.clear();
+    match (status, std::fs::read_to_string(&path)) {
+        (Ok(s), Ok(edited)) if s.success() => app.set_input_text(edited.trim_end().to_string()),
+        (Ok(s), _) if !s.success() => app.status = Some(format!("error: editor exited with {s}")),
+        (Err(e), _) | (_, Err(e)) => app.status = Some(format!("error: {e}")),
+        _ => {}
+    }
+    let _ = std::fs::remove_file(&path);
+}
+
+fn editor() -> String {
+    ["VISUAL", "EDITOR"]
+        .iter()
+        .find_map(|k| std::env::var(k).ok().filter(|v| !v.trim().is_empty()))
+        .unwrap_or_else(|| "nvim".into())
 }
 
 fn runner() -> Result<()> {
