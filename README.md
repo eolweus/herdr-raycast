@@ -44,6 +44,7 @@ Opens in Insert mode. Escape enters Normal mode; Escape does nothing there.
 | `i` `/` | Normal | back to Insert |
 | `1`-`4`, `A` `a` `w` `c`, cmd+`1`-`4`, Tab, Shift+Tab | both (bare digits and letters Normal only) | switch View |
 | `j` `k` ↑ ↓ ^n ^p ^j ^k | Normal / both | move |
+| `h` `l` | Normal | previous / next section (All) or workspace (Workspaces) |
 | Enter | both | focus the Item, or run the Command |
 | ^o | both | action menu for the Item |
 | `p` | Normal | toggle Preview |

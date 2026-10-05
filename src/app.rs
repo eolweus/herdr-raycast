@@ -357,6 +357,20 @@ impl App {
         }
     }
 
+    /// First row of each section (All) or workspace (Workspaces); other Views have one group.
+    fn group_starts(&self) -> Vec<usize> {
+        let key = |n: usize| -> usize {
+            let item = &self.items[self.filtered[n]];
+            match self.view {
+                View::All if n < self.top => usize::MAX,
+                View::All => item.kind.section().0,
+                View::Workspaces => n - (0..=n).rev().position(|m| self.items[self.filtered[m]].depth == 0).unwrap_or(n),
+                _ => 0,
+            }
+        };
+        (0..self.filtered.len()).filter(|&n| n == 0 || key(n) != key(n - 1)).collect()
+    }
+
     pub fn selected(&self) -> Option<&Item> {
         self.filtered.get(self.cursor).map(|&i| &self.items[i])
     }
@@ -640,6 +654,8 @@ impl App {
             'c' => self.set_view(View::Commands),
             'j' => self.cursor = self.move_cursor(1, self.filtered.len()),
             'k' => self.cursor = self.move_cursor(-1, self.filtered.len()),
+            'l' => self.cursor = jump(&self.group_starts(), self.cursor, 1),
+            'h' => self.cursor = jump(&self.group_starts(), self.cursor, -1),
             'g' => self.cursor = 0,
             'G' => self.cursor = self.filtered.len().saturating_sub(1),
             '/' | 'i' => self.mode = Mode::Insert,
@@ -1111,4 +1127,38 @@ fn field(name: &str, value: Seg) -> Vec<Seg> {
 
 fn rule(width: usize) -> Vec<Seg> {
     vec![seg("─".repeat(width.max(1)), Tone::Rule)]
+}
+
+/// Forward goes to the next group's first row; back goes to the current group's
+/// first row, or the previous group's when already there. Both wrap.
+fn jump(starts: &[usize], cursor: usize, dir: i32) -> usize {
+    if starts.is_empty() {
+        return cursor;
+    }
+    let cur = starts.iter().rposition(|&s| s <= cursor).unwrap_or(0);
+    let n = starts.len();
+    let target = if dir > 0 {
+        (cur + 1) % n
+    } else if starts[cur] < cursor {
+        cur
+    } else {
+        (cur + n - 1) % n
+    };
+    starts[target]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::jump;
+
+    #[test]
+    fn jumps_between_groups() {
+        let starts = [0, 3, 7];
+        assert_eq!(jump(&starts, 1, 1), 3);
+        assert_eq!(jump(&starts, 8, 1), 0);
+        assert_eq!(jump(&starts, 5, -1), 3);
+        assert_eq!(jump(&starts, 3, -1), 0);
+        assert_eq!(jump(&starts, 0, -1), 7);
+        assert_eq!(jump(&[], 4, 1), 4);
+    }
 }
