@@ -304,7 +304,8 @@ impl App {
         self.context.clear();
         self.top = 0;
         if self.query.trim().is_empty() {
-            self.filtered = ranked;
+            // Tabs in All are search-only.
+            self.filtered = ranked.into_iter().filter(|&i| self.view != View::All || !matches!(self.items[i].kind, Kind::Tab)).collect();
         } else if self.view == View::Workspaces {
             // Workspaces order by their best match; inside one the tree order holds and
             // ancestors of a match stay as dimmed context.
@@ -558,6 +559,25 @@ impl App {
         let mut out = self.agent_items();
         for (m, s) in self.sources() {
             out.extend(s.workspaces.iter().map(|w| self.workspace_row(m, s, w)));
+        }
+        for (m, s) in self.sources() {
+            out.extend(s.tabs.iter().filter_map(|t| {
+                let label = manual_tab_label(t)?;
+                let mut meta = machine_seg(m);
+                meta.push(seg(s.workspace_label(&t.workspace_id), Tone::Workspace));
+                Some(Item {
+                    kind: Kind::Tab,
+                    id: scoped(format!("tab:{}", t.tab_id), m),
+                    title: label.clone(),
+                    meta,
+                    status: None,
+                    depth: 0,
+                    current: false,
+                    hay: vec![label],
+                    item_ref: Some(ItemRef::Tab { tab_id: t.tab_id.clone(), workspace_id: t.workspace_id.clone() }),
+                    machine: m.map(str::to_string),
+                })
+            }));
         }
         out.extend(self.command_items());
         out
