@@ -639,6 +639,7 @@ impl App {
                 self.apply_filter();
             }
             (Mode::Insert, KeyCode::Esc) => self.mode = Mode::Normal,
+            (Mode::Normal, KeyCode::Esc) => self.quit = true,
             (Mode::Insert, KeyCode::Backspace) => {
                 self.query.pop();
                 self.cursor = 0;

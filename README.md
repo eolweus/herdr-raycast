@@ -36,7 +36,7 @@ munin needs `StreamLocalBindUnlink yes` in its sshd config too. Rename, close, s
 
 ## Keys
 
-Opens in Insert mode. Escape enters Normal mode; Escape does nothing there.
+Opens in Insert mode. Escape enters Normal mode; Escape again closes the palette.
 
 | Key | Where | Does |
 |---|---|---|

@@ -52,14 +52,14 @@ Fuzzy match fields: workspace label and directory name; tab label plus workspace
 
 ## Modes and keys
 
-Opens in Insert. Escape enters Normal. Escape in Normal does nothing.
+Opens in Insert. Escape enters Normal. Escape in Normal closes.
 
 | Key | Mode | Action |
 |---|---|---|
 | typing | Insert | filter |
 | Esc | Insert | to Normal |
 | `/`, `i` | Normal | to Insert |
-| `q` | Normal | close |
+| `q`, Esc | Normal | close |
 | ctrl+c | both | close |
 | `1`-`4`, `A`/`a`/`w`/`c`, cmd+`1`-`4`, Tab, Shift+Tab | both (bare digits and letters Normal only) | switch View |
 | `j`/`k`, arrows, ctrl+n/ctrl+p, ctrl+j/ctrl+k | Normal / both | move |
