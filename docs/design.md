@@ -12,7 +12,7 @@ Working name herdr-raycast, manifest id `erling.command-palette`, display name "
 
 ## Host facts that shape the design
 
-- Herdr 0.9.0 on both machines (munin, hostname `erling-test`, and the laptop). Each Machine runs its own server with its own ids; the plugin is linked on each from `~/herdr-plugins/herdr-raycast` (kept in step by `herdr-plugins sync` in dotfiles). In multi-machine mode the client applies its local keybindings and does not send local custom-command bindings to a remote server, so a palette key only works while viewing a Machine that has the plugin linked and the same `[[keys.command]]` entries.
+- Herdr 0.9.0 on both machines (munin, hostname `server`, and the laptop). Each Machine runs its own server with its own ids; the plugin is linked on each from `~/herdr-plugins/herdr-raycast` (kept in step by `herdr-plugins sync` in dotfiles). In multi-machine mode the client applies its local keybindings and does not send local custom-command bindings to a remote server, so a palette key only works while viewing a Machine that has the plugin linked and the same `[[keys.command]]` entries.
 - Herdr 0.9.0 gave every client its own viewport. `workspace.focus`, `tab.focus` and `pane.focus` still move every attached client; `agent.focus` updates server state only (herdrdev/herdr#3760), so the Focus Agent Built-in goes through the agent's pane. No focus method can address one client.
 - A popup is a per-server session resource: a Palette hosted on one Machine is visible only while the client views that Machine. There is no socket method to switch the client's selected machine. Both facts drive the Machines section below.
 - Agent Status enum: `idle | working | blocked | done | unknown`. `done` = finished while unseen. No last-message API; `terminal_title_stripped` is the free signal, `agent.read --source recent-unwrapped` the paid one.
@@ -24,9 +24,9 @@ Working name herdr-raycast, manifest id `erling.command-palette`, display name "
 ## Layout
 
 ```
-┌ [1] All  [2] Agents  [3] Workspaces  [4] Commands      ~/atlas/infra/terraform ┐
+┌ [1] All  [2] Agents  [3] Workspaces  [4] Commands      ~/work/infra/terraform ┐
 │ > query_                                                                         │
-│ ◉ retire-atlas-upd   blocked   retire-atlas-upd   │ preview (when toggled)      │
+│ ◉ retire-old-api   blocked   retire-old-api   │ preview (when toggled)      │
 │ ✓ reviewer           done      spain outreach     │ status, name, ws, cwd, title│
 │   herdr-raycast                                   │ last 40 lines of output     │
 │   New worktree                       command      │                             │
@@ -96,7 +96,7 @@ Three classes: Built-in (native Rust), Plugin Action (every installed plugin's m
 `$HERDR_PLUGIN_CONFIG_DIR/commands/*.toml`. Never in a repo (ADR-0003).
 
 ```toml
-scope = "/home/erling/atlas/atlas-workspace/worktrees/main/infra/terraform"  # omit for Global
+scope = "/home/you/work/infra/terraform"  # omit for Global
 
 [[commands]]
 id = "new-worktree"

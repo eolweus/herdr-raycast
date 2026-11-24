@@ -1,6 +1,6 @@
 # A scoped file: only visible when the Context Directory is inside `scope`.
 # Worktree checkouts of the same repo match too.
-scope = "/home/erling/atlas/atlas-workspace/worktrees/main/infra"
+scope = "/home/you/work/infra"
 
 [[commands]]
 id = "tf-plan"

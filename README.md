@@ -30,8 +30,8 @@ Drop another machine's Herdr socket into `~/.herdr/machines/<name>.sock` and its
 ```
 Host munin
   StreamLocalBindUnlink yes
-  RemoteForward /home/erling/.herdr/machines/mac.sock /Users/me/.config/herdr/herdr.sock
-  LocalForward  /Users/me/.herdr/machines/munin.sock /home/erling/.config/herdr/herdr.sock
+  RemoteForward /home/you/.herdr/machines/mac.sock /Users/me/.config/herdr/herdr.sock
+  LocalForward  /Users/me/.herdr/machines/munin.sock /home/you/.config/herdr/herdr.sock
 ```
 
 munin needs `StreamLocalBindUnlink yes` in its sshd config too. Rename, close, start agent and `on` commands act on the other machine; `in = split|tab|workspace|current-pane` targets land there, `background` runs the script locally with `RAYCAST_ITEM_MACHINE` and `RAYCAST_ITEM_SOCKET` set. Focus can only be done on that machine's own server, so the palette stays open and tells you to switch machine in Herdr. A machine that stops answering is shown crossed out in the header until it is back.
