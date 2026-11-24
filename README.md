@@ -2,6 +2,8 @@
 
 A Raycast-style command palette for [Herdr](https://herdr.dev). One popup to jump to any workspace, tab, pane or agent, and to run built-in, plugin and user-defined commands.
 
+![Command Palette](docs/screenshot.png)
+
 Design and vocabulary: [`CONTEXT.md`](CONTEXT.md), [`docs/design.md`](docs/design.md), [`docs/adr/`](docs/adr).
 
 ## Install
